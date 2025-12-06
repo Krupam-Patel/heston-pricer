@@ -49,11 +49,3 @@ The main calibration routine for fitting the Heston model parameters to market o
 ## Example Usage
 
 See `Example.ipynb` for demonstrations on model simulation, calibration, and option pricing.
-
-## Installation
-
-Clone the repository:
-```bash
-git clone https://github.com/MarchesiQuant/Heston-Pricer.git
-cd Heston-Pricer
-```
