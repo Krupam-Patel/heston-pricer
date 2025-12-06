@@ -1,2 +1,2 @@
 # heston-pricer
-vibecoder | check README
+check README
