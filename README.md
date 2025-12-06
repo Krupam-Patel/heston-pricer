@@ -4,6 +4,12 @@ A Heston pricing engine for valuing vanilla and exotic equity options. This repo
 
 The implementation provides fast and accurate pricing for vanilla options (standard calls and puts) using the semi-closed-form Heston characteristic function and can be extended to price more complex exotic derivatives, including barriers, Asians, and other path-dependent structures.
 
+## Features
+
+- Fast and accurate pricing for vanilla options (calls, puts)
+- Support for exotic option structures (digital, barrier)
+- Parameter calibration to market data using the Carr-Madan approach.
+
 ## Main Python Classes
 
 ### `HestonModel` (in `heston_model.py`)
@@ -39,12 +45,6 @@ The main calibration routine for fitting the Heston model parameters to market o
 - `calibrate(heston_model, df_surf, S0, r, T, q, ...)`: Fits model parameters to market data for a single maturity.
 - `bs_call_price(...)`: Computes Black-Scholes prices for conversion from vols to prices.
 - `get_vol_slice(...)`: Extracts and interpolates implied volatilities for a given maturity.
-
-## Features
-
-- Fast and accurate pricing for vanilla options (calls, puts)
-- Support for exotic option structures (digital, barrier)
-- Parameter calibration to market data using the Carr-Madan approach.
 
 ## Example Usage
 
