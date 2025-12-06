@@ -1,6 +1,6 @@
 # Heston-Pricer
 
-### A Heston pricing engine for valuing vanilla and exotic equity options. This repository implements the Heston stochastic volatility model, a widely used framework in quantitative finance where volatility follows a mean-reverting square-root process. The model incorporates realistic features, such as volatility clustering and correlation between price and volatility.
+A Heston pricing engine for valuing vanilla and exotic equity options. This repository implements the Heston stochastic volatility model, a widely used framework in quantitative finance where volatility follows a mean-reverting square-root process. The model incorporates realistic features, such as volatility clustering and correlation between price and volatility.
 
 The implementation provides fast and accurate pricing for vanilla options (standard calls and puts) using the semi-closed-form Heston characteristic function and can be extended to price more complex exotic derivatives, including barriers, Asians, and other path-dependent structures. 
 
@@ -16,7 +16,7 @@ simulate(S0, T, r, q, npaths, nsteps, seed): Simulate paths for asset price and 
 heston_cf(u, T, S0, r, q): Compute the characteristic function under the Heston model.
 heston_call(...), carr_madan_call(...), monte_carlo_call(...): Price European options using different techniques.
 
-Pricer (in heston_pricer.py)
+## Pricer (in heston_pricer.py)
 A wrapper class for pricing vanilla and exotic options using an instance of HestonModel. This class provides:
 
 High-level methods to price European, digital, and barrier options.
@@ -28,6 +28,7 @@ barrier(T, S0, r, q, K, B, type, npaths, nsteps, seed): Price barrier options (k
 calibrate Function (in heston_calibration.py)
 The main calibration routine for fitting the Heston model parameters to market option data.
 
+## Calibrate Function (in heston_calibration.py)
 Uses market implied volatilities (from a volatility surface) and converts them to prices via Black-Scholes.
 Fits the Heston model parameters (kappa, theta, xi, rho, v0) by minimizing the squared difference between market prices and Heston model prices produced by the Carr-Madan FFT method.
 Automatically checks the Feller condition for model validity.
