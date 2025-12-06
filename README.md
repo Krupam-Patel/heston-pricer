@@ -12,7 +12,7 @@ The implementation provides fast and accurate pricing for vanilla options (stand
 
 ## Main Python Classes
 
-### `HestonModel` (in `heston_model.py`)
+### HestonModel (in heston_model.py)
 Represents the Heston stochastic volatility model. This class provides:
 - Construction and storage of model parameters (`kappa`, `theta`, `xi`, `rho`, `v0`).
 - Simulation of underlying asset price and volatility paths.
@@ -24,7 +24,7 @@ Represents the Heston stochastic volatility model. This class provides:
 - `heston_cf(u, T, S0, r, q)`: Compute the characteristic function under the Heston model.
 - `heston_call(...)`, `carr_madan_call(...)`, `monte_carlo_call(...)`: Price European options using different techniques.
 
-### `Pricer` (in `heston_pricer.py`)
+### Pricer (in heston_pricer.py)
 A wrapper class for pricing vanilla and exotic options using an instance of `HestonModel`. This class provides:
 - High-level methods to price European, digital, and barrier options.
 - Integration with model calibration and simulation routines.
