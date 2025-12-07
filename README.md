@@ -25,7 +25,7 @@ Represents the Heston stochastic volatility model. This class provides:
 - `heston_call(...)`: Prices European call options using the semi-analytical Heston formula based on the model’s characteristic function (direct numerical integration).
 - `carr_madan_call(...)`: Implements the Carr–Madan FFT approach to price European options efficiently across a range of strikes using Fourier inversion.
 - `monte_carlo_call(...)`: Uses Monte Carlo simulation of the Heston stochastic volatility process to estimate European option prices, with flexibility for path-dependent extensions.
-
+***
 ### Pricer (in heston_pricer.py)
 A wrapper class for pricing vanilla and exotic options using an instance of `HestonModel`. This class provides:
 - High-level methods to price European, digital, and barrier options.
