@@ -1,3 +1,4 @@
+"""Heston Model Calibration via Carr–Madan FFT"""
 import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import norm
