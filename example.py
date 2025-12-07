@@ -15,9 +15,7 @@ from heston_model import HestonModel
 from heston_calibration import calibrate, bs_implied_vol, get_vol_slice
 from heston_pricer import Pricer
 
-# ---------------------------
 # Global Matplotlib styling
-# ---------------------------
 try:
     plt.style.use("seaborn-v0_8")
 except Exception:
@@ -39,7 +37,7 @@ mpl.rcParams.update({
     "lines.markersize": 6,
 })
 
-#Loading data and calibrate Heston model
+#Loading data and calibrating Heston model
 def main():
     init_params = dict(
         kappa=1.0,
@@ -105,7 +103,7 @@ def main():
     plt.tight_layout()
     plt.show()
 
-    # 2B. 3D Surface
+    # 3D Surface
     X = surf.columns.astype(float)
     Y = surf.index.astype(float)
     X_grid, Y_grid = np.meshgrid(X, Y)
