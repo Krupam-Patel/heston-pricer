@@ -18,7 +18,7 @@ class HestonModel:
 
         Parameters
         ----------
-        S0 : float
+        S0: float
             Initial spot price.
         T: float
             Time to maturity (years).
@@ -267,9 +267,9 @@ class HestonModel:
             Strikes.
         npaths: int
             Number of simulation paths.
-        nsteps: int, optional
+        nsteps: int
             Time steps per year.
-        seed: int, optional
+        seed: int
             Random seed.
 
         Returns
