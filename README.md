@@ -35,7 +35,7 @@ A wrapper class for pricing vanilla and exotic options using an instance of `Hes
 - `european(T, S0, r, q, K, type)`: Price standard European options.
 - `digital(T, S0, r, q, K, type, npaths)`: Price digital (binary) options via simulation.
 - `barrier(T, S0, r, q, K, B, type, npaths, nsteps, seed)`: Price barrier options (knock-in/knock-out) using path simulation.
-
+***
 ### Calibrate Function (in heston_calibration.py)
 The main calibration routine for fitting the Heston model parameters to market option data.
 - Uses market implied volatilities (from a volatility surface) and converts them to prices via Black-Scholes.
