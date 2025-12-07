@@ -20,8 +20,8 @@ Represents the Heston stochastic volatility model. This class provides:
 - Analytical and numerical pricing of European call options using several approaches: direct integration, Fast Fourier Transform (Carr-Madan), and Monte Carlo simulation.
 
 #### Key Methods:
-- simulate(S0, T, r, q, npaths, nsteps, seed): Simulate paths for asset price and variance.
-- heston_cf(u, T, S0, r, q): Compute the characteristic function under the Heston model.
+- simulate(`S0`, `T`, `r`, `q`, `npaths`, `nsteps`, `seed`): Simulate paths for asset price and variance.
+- heston_cf(`u`, `T`, `S0`, `r`, `q`): Compute the characteristic function under the Heston model.
 - heston_call(...), carr_madan_call(...), monte_carlo_call(...): Price European options using different techniques.
 
 ### Pricer (in heston_pricer.py)
