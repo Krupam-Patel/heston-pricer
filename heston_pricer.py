@@ -2,142 +2,151 @@
 import numpy as np
 
 class Pricer:
+    """
+    Pricing engine for European, digital, and barrier options using a model
+    that provides pricing and simulation methods (e.g., Heston model).
+    """
 
     def __init__(self, model):
         """
-        Initialize the Pricer with a calibrated model.
+        Store the model instance used for pricing
 
         Parameters
         ----------
-        model : object
-            A model instance (e.g., Heston, Jump-Heston) that implements pricing and simulation methods.
+        model: object
+            Model with methods: heston_call(), simulate(), etc
         """
         self.model = model
 
 
     def european(self, T, S0, r, q, K, type='Call'):
         """
-        Price European options using the Heston model.
+        Price a European call or put using the model's closed-form Heston method
 
         Parameters
         ----------
-        S0 : float
-            Initial spot price.
-        T : float
-            Time to maturity (in years).            
-        r : float
-            Risk-free rate.
-        q : float
-            Dividend yield. 
-        K : float or ndarray
-            Strike(s) for which to return prices.
-        type : str, optional
-            Option type: 'Call' or 'Put'. Default is 'Call'.
-        npaths : int, optional
-            Number of Monte Carlo paths (relevant if model method uses Monte Carlo internally).
+        T: float
+            Maturity
+        S0: float
+            Spot price
+        r: float
+            Risk-free rate
+        q: float
+            Dividend yield
+        K: float or ndarray
+            Strike(s)
+        type: {'Call','Put'}
+            Option type
 
         Returns
         -------
-        price : float or ndarray
-            Option price corresponding to strike K.
+        price: float
+            European option price
         """
         call_price = self.model.heston_call(T, S0, r, q, K)
-        price = call_price if type == 'Call' else call_price - S0 * np.exp(-q * T) + K * np.exp(-r * T)
+        # Put–call parity adjustment for put price
+        price = call_price if type == 'Call' else call_price - S0*np.exp(-q*T) + K*np.exp(-r*T)
         return price[0]
 
 
-    def digital(self, T, S0, r, q, K, type='Call', npaths=10**5, seed=None):
+    def digital(self, T, S0, r, q, K, type='Call', npaths=250000, seed=None):
         """
-        Price European digital options using Monte Carlo simulation under the Heston model.
+        Price a European digital option using Monte Carlo simulation.
 
         Parameters
         ----------
-        S0 : float
-            Initial spot price.
-        T : float
-            Time to maturity (in years).
-        r : float
-            Risk-free rate.
-        q : float
-            Dividend yield.
-        K : float or ndarray
-            Strike.
-        type : str, optional
-            Option type: 'Call' or 'Put'. Default is 'Call'.
-        npaths : int, optional
-            Number of Monte Carlo paths to simulate.
-        seed : int, optional
-            Random seed for reproducibility.
+        T: float
+            Maturity
+        S0: float
+            Spot price
+        r: float
+            Risk-free rate
+        q: float
+            Dividend yield
+        K: float
+            Strike
+        type: {'Call','Put'}
+            Digital payoff direction
+        npaths: int
+            Number of simulated paths
+        seed: int
+            RNG seed
 
         Returns
         -------
-        price : float
-            Digital option price corresponding to strike K.
+        price: float
+            Digital option price
         """
         S_t, _ = self.model.simulate(S0, T, r, q, npaths=npaths, nsteps=252, seed=seed)
         S_T = S_t[-1, :]
-        price = np.exp(-r * T) * np.mean(S_T > K) if type == 'Call' else np.exp(-r * T) * np.mean(S_T < K)
+
+        # Binary payoff under risk-neutral discounting
+        if type == 'Call':
+            price = np.exp(-r*T) * np.mean(S_T > K)
+        else:
+            price = np.exp(-r*T) * np.mean(S_T < K)
+
         return price
 
 
-    def barrier(self, T, S0, r, q, K, B, barrier_type='UpAndOut', option_type='Call', npaths=10**5, nsteps=252, seed=None):
+    def barrier(self, T, S0, r, q, K, B, barrier_type='UpAndOut', option_type='Call',
+                npaths=250000, nsteps=365, seed=None):
         """
-        Price European barrier options using Monte Carlo simulation under the Heston model.
+        Price barrier options using Monte Carlo simulation
 
         Parameters
         ----------
-        S0 : float
-            Initial spot price.
-        T : float
-            Time to maturity (in years).
-        r : float
-            Risk-free rate.
-        q : float
-            Dividend yield.
-        K : float
-            Strike.
-        B : float
-            Barrier level.
-        barrier_type : str, optional
-            Barrier type: 'UpAndOut', 'DownAndOut', 'UpAndIn', 'DownAndIn'. Default is 'UpAndOut'.
-        option_type : str, optional
-            Option type: 'Call' or 'Put'. Default is 'Call'.
-        npaths : int, optional
-            Number of Monte Carlo paths to simulate.
-        nsteps : int, optional
-            Number of time steps per path.
-        seed : int, optional
-            Random seed for reproducibility.
+        T: float
+            Maturity
+        S0: float
+            Spot price
+        r: float
+            Risk-free rate
+        q: float
+            Dividend yield
+        K: float
+            Strike
+        B: float
+            Barrier level
+        barrier_type: {'UpAndOut','DownAndOut','UpAndIn','DownAndIn'}
+            Barrier direction and knock-in/knock-out type
+        option_type: {'Call','Put'}
+            Payoff direction
+        npaths: int
+            Number of simulated paths
+        nsteps: int
+            Time discretization
+        seed: int
+            RNG seed
 
         Returns
         -------
-        price : float
-            Barrier option price corresponding to strike K.
+        price: float
+            Barrier option price
         """
         S_t, _ = self.model.simulate(S0, T, r, q, npaths=npaths, nsteps=nsteps, seed=seed)
-        
-        # Check if barrier was hit during the life of the option
+
+        # Barrier monitoring along each path
         if barrier_type in ['UpAndOut', 'UpAndIn']:
             barrier_hit = np.any(S_t >= B, axis=0)
         elif barrier_type in ['DownAndOut', 'DownAndIn']:
             barrier_hit = np.any(S_t <= B, axis=0)
         else:
-            raise ValueError("Invalid barrier type. Choose from 'UpAndOut', 'DownAndOut', 'UpAndIn', 'DownAndIn'.")
+            raise ValueError("Invalid barrier type.")
 
-        # Calculate payoff based on option type
+        # European payoff at maturity
         if option_type == 'Call':
             payoff = np.maximum(S_t[-1, :] - K, 0)
         elif option_type == 'Put':
             payoff = np.maximum(K - S_t[-1, :], 0)
         else:
-            raise ValueError("Invalid option type. Choose 'Call' or 'Put'.")
+            raise ValueError("Invalid option type.")
 
+        # Apply barrier condition
         if barrier_type.endswith('Out'):
-            # Knockout: option dies if barrier is hit
-            payoff[barrier_hit] = 0  
-        else:
-            # Knock-in: option only pays if barrier was hit
+            payoff[barrier_hit] = 0
+        else:  # Knock-in
             payoff[~barrier_hit] = 0
 
-        price = np.exp(-r * T) * np.mean(payoff)
+        price = np.exp(-r*T) * np.mean(payoff)
         return price
