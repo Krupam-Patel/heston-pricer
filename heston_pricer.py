@@ -1,9 +1,7 @@
+"""Heston Option Pricing Engine: exotic and vanilla"""
 import numpy as np
 
 class Pricer:
-    """
-    Pricer class for vanilla and exotic options using the Heston model.
-    """
 
     def __init__(self, model):
         """
