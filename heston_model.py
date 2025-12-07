@@ -14,31 +14,31 @@ class HestonModel:
     def simulate(self, S0, T, r, q, npaths=3**5, nsteps=365, seed=None):
         """
         Simulate asset and variance paths under the Heston model using
-        full-truncation Euler for variance and log-spot for price.
+        full-truncation Euler for variance and log-spot for price
 
         Parameters
         ----------
         S0: float
-            Initial spot price.
+            Initial spot price
         T: float
-            Time to maturity (years).
+            Time to maturity (years)
         r: float
-            Risk-free rate.
+            Risk-free rate
         q: float
-            Continuous dividend yield.
+            Continuous dividend yield
         npaths: int
-            Number of simulation paths.
+            Number of simulation paths
         nsteps: int
-            Time steps per year.
+            Time steps per year
         seed: int
-            Random seed.
+            Random seed
 
         Returns
         -------
         S: ndarray
-            Asset paths, shape (steps+1, npaths).
+            Asset paths, shape (steps+1, npaths)
         nu: ndarray
-            Variance paths, shape (steps+1, npaths).
+            Variance paths, shape (steps+1, npaths)
         """
         if seed is not None:
             np.random.seed(seed)
@@ -76,25 +76,25 @@ class HestonModel:
 
     def heston_cf(self, u, T, S0, r, q):
         """
-        Risk-neutral characteristic function of log(S_T).
+        Risk-neutral characteristic function of log(S_T)
 
         Parameters
         ----------
         u: float or array_like
-            Argument of the characteristic function.
+            Argument of the characteristic function
         T: float
-            Time to maturity.
+            Time to maturity
         S0: float
-            Initial spot price.
+            Initial spot price
         r: float
-            Risk-free rate.
+            Risk-free rate
         q: float
-            Continuous dividend yield.
+            Continuous dividend yield
 
         Returns
         -------
         phi: complex or ndarray of complex
-            φ(u) = E[exp(i u ln S_T)].
+            φ(u) = E[exp(i u ln S_T)]
         """
         u = np.atleast_1d(u)
         i = 1j
@@ -125,22 +125,22 @@ class HestonModel:
         Parameters
         ----------
         v: float or array_like
-            Frequency variable.
+            Frequency variable
         T: float
-            Time to maturity.
+            Time to maturity
         S0 : float
-            Spot price.
+            Spot price
         r: float
-            Risk-free rate.
+            Risk-free rate
         q: float
-            Dividend yield.
+            Dividend yield
         alpha: float, optional
-            Damping parameter (>0).
+            Damping parameter (>0)
 
         Returns
         -------
         psi: complex or ndarray of complex
-            Transform of e^{-alpha k} C(k).
+            Transform of e^{-alpha k} C(k)
         """
         v = np.atleast_1d(v)
         i = 1j
@@ -154,31 +154,31 @@ class HestonModel:
 
     def carr_madan_call(self, T, S0, r, q, K, alpha=1.5, N=4096, eta=0.225):
         """
-        Price European calls via Carr–Madan FFT and interpolate to strikes K.
+        Price European calls via Carr–Madan FFT and interpolate to strikes K
 
         Parameters
         ----------
         T: float
-            Time to maturity.
+            Time to maturity
         S0: float
-            Spot price.
+            Spot price
         r: float
-            Risk-free rate.
+            Risk-free rate
         q: float
-            Dividend yield.
+            Dividend yield
         K: float or ndarray
-            Strikes.
+            Strikes
         alpha: float
-            Damping factor.
+            Damping factor
         N: int
-            FFT grid size.
+            FFT grid size
         eta: float
-            Spacing in Fourier domain.
+            Spacing in Fourier domain
 
         Returns
         -------
         call_prices: ndarray
-            Call prices at strikes K.
+            Call prices at strikes K
         """
         v = np.arange(N) * eta
         psi = self.call_transform(v, T, S0, r, q, alpha=alpha)
@@ -206,29 +206,29 @@ class HestonModel:
 
     def heston_call(self, T, S0, r, q, K, N=2000, U_max=175):
         """
-        European call price under the Heston model via the P1/P2 integral representation.
+        European call price under the Heston model via the P1/P2 integral representation
 
         Parameters
         ----------
         T: float
-            Time to maturity.
+            Time to maturity
         S0: float
-            Spot price.
+            Spot price
         r: float
-            Risk-free rate.
+            Risk-free rate
         q: float
-            Dividend yield.
+            Dividend yield
         K: float or ndarray
-            Strikes.
+            Strikes
         N: int
-            Number of integration points.
-        U_max : float
-            Upper integration limit.
+            Number of integration points
+        U_max: float
+            Upper integration limit
 
         Returns
         -------
         call_prices: ndarray
-            Call prices at strikes K.
+            Call prices at strikes K
         """
         i = 1j
         K = np.atleast_1d(K)
@@ -251,31 +251,31 @@ class HestonModel:
 
     def monte_carlo_call(self, T, S0, r, q, K, npaths=200000, nsteps=365, seed=None):
         """
-        European call price via Monte Carlo simulation under the Heston model.
+        European call price via Monte Carlo simulation under the Heston model
 
         Parameters
         ----------
         T: float
-            Time to maturity.
+            Time to maturity
         S0: float
-            Spot price.
+            Spot price
         r: float
-            Risk-free rate.
+            Risk-free rate
         q: float
-            Dividend yield.
+            Dividend yield
         K: float or ndarray
-            Strikes.
+            Strikes
         npaths: int
-            Number of simulation paths.
+            Number of simulation paths
         nsteps: int
-            Time steps per year.
+            Time steps per year
         seed: int
-            Random seed.
+            Random seed
 
         Returns
         -------
         call_prices: ndarray
-            Call prices at strikes K.
+            Call prices at strikes K
         """
         K = np.atleast_1d(K)
         S, _ = self.simulate(S0, T, r, q, npaths=npaths, nsteps=nsteps, seed=seed)
