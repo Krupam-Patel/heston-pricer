@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 from scipy.optimize import brentq
 
 
-def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0.25):
+def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0.225):
     """
     Calibrate Heston model parameters to market-implied vols for a single maturity T.
     The function extracts a slice of the implied volatility surface, converts the vols
