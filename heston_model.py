@@ -1,10 +1,8 @@
+"""Heston stochastic volatility model."""
 import numpy as np
 from scipy.interpolate import interp1d
 
-
 class HestonModel:
-    """Heston stochastic volatility model."""
-
     def __init__(self, params):
         self.params = params
         self.kappa = params['kappa']  # Mean-reversion speed of variance
