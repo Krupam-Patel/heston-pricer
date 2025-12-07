@@ -12,6 +12,29 @@ The implementation provides fast and accurate pricing for vanilla options (stand
 
 ## Main Python Components
 
+
+### Calibration Functions (in `heston_calibration.py`)
+
+The main calibration routines for fitting Heston model parameters to market option data.
+
+- Use market implied volatilities (from a volatility surface) and convert them to prices via the Black–Scholes formula.
+- Fit the Heston parameters (`kappa`, `theta`, `xi`, `rho`, `v0`) by minimizing the squared difference between market prices and Heston model prices produced by the Carr–Madan FFT method.
+- Automatically check the Feller condition for variance process positivity and flag violations.
+- Provide detailed output about the calibration process, including estimated parameters, objective value (error), and price differences.
+
+#### Key Methods / Functions
+
+- `calibrate(heston_model, df_surf, S0, r, T, q, ...)`:  
+  Fits model parameters to market data for a given maturity slice using least-squares minimization.
+
+- `bs_call_price(...)`:  
+  Computes Black–Scholes call prices used to convert implied volatilities into option prices.
+
+- `get_vol_slice(...)`:  
+  Extracts and interpolates implied volatilities for a given maturity from a volatility surface DataFrame.
+  
+***
+
 ### `HestonModel` (in `heston_model.py`)
 
 Represents the Heston stochastic volatility model used for equity-derivatives pricing. This class provides:
@@ -62,26 +85,6 @@ A high-level wrapper for pricing vanilla and exotic options using an instance of
   Prices barrier options (e.g., knock-in/knock-out) using path simulation under the Heston model.
 
 ---
-
-### Calibration Functions (in `heston_calibration.py`)
-
-The main calibration routines for fitting Heston model parameters to market option data.
-
-- Use market implied volatilities (from a volatility surface) and convert them to prices via the Black–Scholes formula.
-- Fit the Heston parameters (`kappa`, `theta`, `xi`, `rho`, `v0`) by minimizing the squared difference between market prices and Heston model prices produced by the Carr–Madan FFT method.
-- Automatically check the Feller condition for variance process positivity and flag violations.
-- Provide detailed output about the calibration process, including estimated parameters, objective value (error), and price differences.
-
-#### Key Methods / Functions
-
-- `calibrate(heston_model, df_surf, S0, r, T, q, ...)`:  
-  Fits model parameters to market data for a given maturity slice using least-squares minimization.
-
-- `bs_call_price(...)`:  
-  Computes Black–Scholes call prices used to convert implied volatilities into option prices.
-
-- `get_vol_slice(...)`:  
-  Extracts and interpolates implied volatilities for a given maturity from a volatility surface DataFrame.
 
 ## Example Usage
 
