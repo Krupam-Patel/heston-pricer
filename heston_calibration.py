@@ -22,15 +22,15 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
     C_market = bs_call_price(S0, K_market, T, r, q, sigma_market)
 
     # Initial guess for parameters: [kappa, xi, rho, v0, phi]
-    # phi is an auxiliary parameter used to construct theta for enforcing Feller condition
-    x0 = [0.5, 0.3, -0.5, 0.1, 0.2]
+    # phi is an auxiliary parameter used to construct theta for enforcing the Feller condition
+    x0 = [1.0, 0.4, -0.7, 0.05, 0.2]
 
     # Parameter bounds to keep optimization in a stable region
     bounds = [
-        (1e-3, 10),     # kappa
-        (1e-3, 2),      # xi (vol-of-vol)
-        (-0.99, 0.99),  # rho (correlation)
-        (1e-3, 1),      # v0 (initial variance)
+        (0.01, 5),     # kappa
+        (0.05, 2),      # xi (vol-of-vol)
+        (-0.95, 1),  # rho (correlation)
+        (1e-4, 0.5),      # v0 (initial variance)
         (0, 1)          # phi (auxiliary term)
     ]
 
