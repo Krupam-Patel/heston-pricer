@@ -20,11 +20,11 @@ Represents the Heston stochastic volatility model. This class provides:
 - Analytical and numerical pricing of European call options using several approaches: direct integration, Fast Fourier Transform (Carr-Madan), and Monte Carlo simulation.
 
 #### Key Methods:
-- simulate(`S0`, `T`, `r`, `q`, `npaths`, `nsteps`, `seed`): Simulate paths for asset price and variance.
-- heston_cf(`u`, `T`, `S0`, `r`, `q`): Compute the characteristic function under the Heston model.
-- heston_call(...): Prices European call options using the semi-analytical Heston formula based on the model’s characteristic function (direct numerical integration).
-- carr_madan_call(...): Implements the Carr–Madan FFT approach to price European options efficiently across a range of strikes using Fourier inversion.
-- monte_carlo_call(...): Uses Monte Carlo simulation of the Heston stochastic volatility process to estimate European option prices, with flexibility for path-dependent extensions.
+- `simulate(S0, T, r, q, npaths, nsteps, seed)`: Simulate paths for asset price and variance.
+- `heston_cf(u, T, S0, r, q)`: Compute the characteristic function under the Heston model.
+- `heston_call(...)`: Prices European call options using the semi-analytical Heston formula based on the model’s characteristic function (direct numerical integration).
+- `carr_madan_call(...)`: Implements the Carr–Madan FFT approach to price European options efficiently across a range of strikes using Fourier inversion.
+- `monte_carlo_call(...)`: Uses Monte Carlo simulation of the Heston stochastic volatility process to estimate European option prices, with flexibility for path-dependent extensions.
 
 ### Pricer (in heston_pricer.py)
 A wrapper class for pricing vanilla and exotic options using an instance of `HestonModel`. This class provides:
@@ -36,7 +36,7 @@ A wrapper class for pricing vanilla and exotic options using an instance of `Hes
 - `digital(T, S0, r, q, K, type, npaths)`: Price digital (binary) options via simulation.
 - `barrier(T, S0, r, q, K, B, type, npaths, nsteps, seed)`: Price barrier options (knock-in/knock-out) using path simulation.
 
-### `calibrate` Function (in `heston_calibration.py`)
+### Calibrate Function (in heston_calibration.py)
 The main calibration routine for fitting the Heston model parameters to market option data.
 - Uses market implied volatilities (from a volatility surface) and converts them to prices via Black-Scholes.
 - Fits the Heston model parameters (`kappa`, `theta`, `xi`, `rho`, `v0`) by minimizing the squared difference between market prices and Heston model prices produced by the Carr-Madan FFT method.
