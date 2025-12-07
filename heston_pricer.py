@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class Pricer:
     """
     Pricer class for vanilla and exotic options using the Heston model.
