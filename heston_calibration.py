@@ -43,7 +43,6 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
         history.append((params, error))
         return error
 
-    # Run optimization using L-BFGS-B with bounds
     result = minimize(
         objective,
         x0,
@@ -52,7 +51,6 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
         options={'disp': True, 'maxiter': 500}
     )
 
-    # If calibration succeeded, update the model with the optimized parameters
     if result.success:
         kappa, xi, rho, v0, phi = result.x
         theta = (xi**2 + phi) / (2 * kappa)
@@ -71,12 +69,9 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
         print(f"kappa: {kappa:.5f}, theta: {theta:.5f}, xi: {xi:.5f}, "
               f"rho: {rho:.5f}, v0: {v0:.5f}\n")
 
-        # Check the Feller condition for variance positivity
-        # Condition: 2*kappa*theta ≥ xi^2
         if 2 * kappa * theta < xi**2:
             print("Warning: Feller condition NOT satisfied!\n")
 
-        # Compare calibrated model prices vs market prices
         C_model = heston_model.carr_madan_call(
             T, S0, r, q, K_market, alpha=alpha, N=N_fft, eta=eta
         )
@@ -87,43 +82,28 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
 
     else:
         print("Calibration failed:", result.message)
-
     return result
 
 
 def bs_call_price(S0, K, T, r, q, sigma):
-    """
-    Compute the Black–Scholes price of a European call option with continuous dividend yield q.
-    Supports vectorized inputs for K and sigma.
-    """
     K = np.atleast_1d(K)
     sigma = np.atleast_1d(sigma)
 
-    # Forward price under continuous dividend yield
     F = S0 * np.exp((r - q) * T)
 
-    # Black–Scholes d1, d2 terms
     d1 = (np.log(F / K) + 0.5 * sigma**2 * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
 
-    # Discounted expected payoff under risk-neutral measure
     return np.exp(-r * T) * (F * norm.cdf(d1) - K * norm.cdf(d2))
 
 
 def bs_implied_vol(S0, K, T, r, q, market_price):
-    """
-    Compute the implied volatility using Brent's root-finding method.
-    Solves for sigma such that Black–Scholes price(sigma) = market_price.
-    Returns NaN if no implied vol can be found in the search interval.
-    """
-
     def objective(sigma):
         return bs_call_price(S0, K, T, r, q, sigma) - market_price
-
     try:
-        return brentq(objective, 1e-6, 5.0)  # Solve for sigma in a reasonable range
+        return brentq(objective, 1e-6, 5.0)
     except ValueError:
-        return np.nan  # No implied volatility exists
+        return np.nan  
 
 
 def get_vol_slice(df_vol, T):
