@@ -9,13 +9,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from mpl_toolkits.mplot3d import Axes3D
 
 from heston_model import HestonModel
 from heston_calibration import calibrate, bs_implied_vol, get_vol_slice
 from heston_pricer import Pricer
 
-# Global Matplotlib styling
 try:
     plt.style.use("seaborn-v0_8")
 except Exception:
@@ -37,7 +36,6 @@ mpl.rcParams.update({
     "lines.markersize": 6,
 })
 
-#Loading data and calibrating Heston model
 def main():
     init_params = dict(
         kappa=1.0,
@@ -52,10 +50,8 @@ def main():
     market_data = pd.read_excel(file, sheet_name="Market_Data")
     surf = pd.read_excel(file, sheet_name="Vol_Matrix", index_col=0)
 
-    # Calibration maturity
     T = 1.0
 
-    # Risk-free rate
     rate_curve = (
         market_data[["Year_Frac", "Risk_Free_Rate"]]
         .drop_duplicates()
@@ -63,7 +59,6 @@ def main():
     )
     r = np.interp(T, rate_curve["Year_Frac"], rate_curve["Risk_Free_Rate"])
 
-    # Dividend yield
     div_curve = (
         market_data[["Year_Frac", "Div_Yield"]]
         .drop_duplicates()
@@ -71,16 +66,12 @@ def main():
     )
     q = np.interp(T, div_curve["Year_Frac"], div_curve["Div_Yield"])
 
-    # Spot
     S0 = float(market_data["S0"].iloc[0])
 
-    # Calibrate
     print("Calibrating Heston model...")
     res = calibrate(model, surf, S0, r, T, q)
     print("Calibration result:", res)
 
-# Implied volatility surface visualizations
-    # Heatmap
     fig, ax = plt.subplots()
     im = ax.imshow(
         surf.values,
@@ -103,7 +94,6 @@ def main():
     plt.tight_layout()
     plt.show()
 
-    # 3D Surface
     X = surf.columns.astype(float)
     Y = surf.index.astype(float)
     X_grid, Y_grid = np.meshgrid(X, Y)
@@ -131,7 +121,7 @@ def main():
 
     plt.tight_layout()
     plt.show()
-# Volatility smiles – Heston vs Market
+
     fig, axes = plt.subplots(2, 2, figsize=(11, 8))
     axes = axes.flatten()
 
@@ -160,7 +150,6 @@ def main():
     plt.tight_layout(rect=[0, 0.02, 1, 0.96])
     plt.show()
 
-# Detailed smile at calibration maturity
     mny_T, mkt_T = get_vol_slice(surf, T)
     K_T = mny_T * S0 / 100
 
@@ -184,10 +173,9 @@ def main():
 
     plt.tight_layout()
     plt.show()
-# Volatility process simulation
+
     S_paths, v_paths = model.simulate(S0, T, r, q, npaths=1000)
 
-# A subset of vol paths
     n_plot = 40
     fig, ax = plt.subplots()
     ax.plot(np.sqrt(v_paths[:, :n_plot]), alpha=0.35)
@@ -199,7 +187,6 @@ def main():
     plt.tight_layout()
     plt.show()
 
-# Fan chart
     subset = np.sqrt(v_paths[:, :300])
     p10 = np.percentile(subset, 10, axis=1)
     p50 = np.percentile(subset, 50, axis=1)
@@ -219,7 +206,6 @@ def main():
     plt.tight_layout()
     plt.show()
 
-# Terminal price distribution
     fig, ax = plt.subplots()
     ax.hist(S_paths[-1], bins=60, density=True, alpha=0.75)
 
@@ -230,7 +216,6 @@ def main():
     plt.tight_layout()
     plt.show()
 
-# Call price comparison – MC vs CF vs FFT
     K_grid = np.linspace(0.5 * S0, 2.0 * S0, 200)
 
     mc = model.monte_carlo_call(T, S0, r, q, K_grid)
@@ -253,7 +238,6 @@ def main():
     plt.tight_layout()
     plt.show()
 
-# Pricing examples with Pricer
     pricer = Pricer(model)
     K = 200.0
     B = 150.0
@@ -264,22 +248,18 @@ def main():
 
     print("\n--- Pricing Examples (Heston Pricer) ---")
 
-# European Call
     mtm = 21522.81
     call_price = pricer.european(T, S0, r, q, K, type="Call") * n
     print(f"European Call: {call_price:.2f}, Rel. error vs MTM: {call_price/mtm - 1:.3%}")
 
-# European Put
     mtm = 26149.40
     put_price = pricer.european(T, S0, r, q, K, type="Put") * n
     print(f"European Put:  {put_price:.2f}, Rel. error vs MTM: {put_price/mtm - 1:.3%}")
 
-# Digital Call
     mtm = 395.72
     digital_call = pricer.digital(T, S0, r, q, K, type="Call", npaths=paths, seed=seed) * n
     print(f"Digital Call:  {digital_call:.2f}, Rel. error vs MTM: {digital_call/mtm - 1:.3%}")
 
-# Digital Put
     mtm = 571.86
     digital_put = pricer.digital(T, S0, r, q, K, type="Put", npaths=paths, seed=seed) * n
     print(f"Digital Put:   {digital_put:.2f}, Rel. error vs MTM: {digital_put/mtm - 1:.3%}")
