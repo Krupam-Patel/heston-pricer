@@ -23,7 +23,7 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
 
     K_market = np.atleast_1d(K_market)
     C_market = np.atleast_1d(C_market)
-    history = []  # Store (params, error) for debugging or visualization if needed
+    history = [] 
 
     def objective(params):
         kappa, xi, rho, v0, phi = params
