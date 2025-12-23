@@ -12,53 +12,22 @@ class HestonModel:
         self.v0 = params['v0']        # Initial variance
 
     def simulate(self, S0, T, r, q, npaths=3**5, nsteps=365, seed=None):
-        """
-        Simulate asset and variance paths under the Heston model using
-        full-truncation Euler for variance and log-spot for price
-
-        Parameters
-        ----------
-        S0: float
-            Initial spot price
-        T: float
-            Time to maturity (years)
-        r: float
-            Risk-free rate
-        q: float
-            Continuous dividend yield
-        npaths: int
-            Number of simulation paths
-        nsteps: int
-            Time steps per year
-        seed: int
-            Random seed
-
-        Returns
-        -------
-        S: ndarray
-            Asset paths, shape (steps+1, npaths)
-        nu: ndarray
-            Variance paths, shape (steps+1, npaths)
-        """
         if seed is not None:
             np.random.seed(seed)
 
         steps = round(nsteps * T)
         dt = T / steps
 
-        # Stating arrays
         nu = np.zeros((steps + 1, npaths))
         S = np.zeros((steps + 1, npaths))
         nu[0] = self.v0
         S[0] = S0
 
         for t in range(1, steps + 1):
-            # Correlated Brownian increments
             dW_S = np.random.normal(0, np.sqrt(dt), npaths)
             Z = np.random.normal(0, np.sqrt(dt), npaths)
             dW_nu = self.rho * dW_S + np.sqrt(1 - self.rho**2) * Z
-
-            # Full-truncation Euler for variance
+            
             nu_prev = np.maximum(nu[t - 1], 0)
             nu[t] = (
                 nu[t - 1]
@@ -73,29 +42,8 @@ class HestonModel:
             )
 
         return S, nu
-
+        
     def heston_cf(self, u, T, S0, r, q):
-        """
-        Risk-neutral characteristic function of log(S_T)
-
-        Parameters
-        ----------
-        u: float or array_like
-            Argument of the characteristic function
-        T: float
-            Time to maturity
-        S0: float
-            Initial spot price
-        r: float
-            Risk-free rate
-        q: float
-            Continuous dividend yield
-
-        Returns
-        -------
-        phi: complex or ndarray of complex
-            φ(u) = E[exp(i u ln S_T)]
-        """
         u = np.atleast_1d(u)
         i = 1j
         x0 = np.log(S0)
@@ -119,29 +67,6 @@ class HestonModel:
         return phi[0] if phi.size == 1 else phi
 
     def call_transform(self, v, T, S0, r, q, alpha=1.5):
-        """
-        Fourier transform of the damped call price (Carr–Madan).
-
-        Parameters
-        ----------
-        v: float or array_like
-            Frequency variable
-        T: float
-            Time to maturity
-        S0 : float
-            Spot price
-        r: float
-            Risk-free rate
-        q: float
-            Dividend yield
-        alpha: float, optional
-            Damping parameter (>0)
-
-        Returns
-        -------
-        psi: complex or ndarray of complex
-            Transform of e^{-alpha k} C(k)
-        """
         v = np.atleast_1d(v)
         i = 1j
 
@@ -153,41 +78,12 @@ class HestonModel:
         return psi
 
     def carr_madan_call(self, T, S0, r, q, K, alpha=1.5, N=4096, eta=0.225):
-        """
-        Price European calls via Carr–Madan FFT and interpolate to strikes K
-
-        Parameters
-        ----------
-        T: float
-            Time to maturity
-        S0: float
-            Spot price
-        r: float
-            Risk-free rate
-        q: float
-            Dividend yield
-        K: float or ndarray
-            Strikes
-        alpha: float
-            Damping factor
-        N: int
-            FFT grid size
-        eta: float
-            Spacing in Fourier domain
-
-        Returns
-        -------
-        call_prices: ndarray
-            Call prices at strikes K
-        """
         v = np.arange(N) * eta
         psi = self.call_transform(v, T, S0, r, q, alpha=alpha)
 
-        # Trapezoidal rule weights
         w = eta * np.ones(N)
         w[0] = w[-1] = 0.5 * eta
 
-        # FFT centering and log-strike grid
         lam = 2.0 * np.pi / (N * eta)
         b = 0.5 * N * lam
         x = psi * np.exp(1j * b * v) * w
@@ -205,31 +101,6 @@ class HestonModel:
         return call_prices
 
     def heston_call(self, T, S0, r, q, K, N=2000, U_max=175):
-        """
-        European call price under the Heston model via the P1/P2 integral representation
-
-        Parameters
-        ----------
-        T: float
-            Time to maturity
-        S0: float
-            Spot price
-        r: float
-            Risk-free rate
-        q: float
-            Dividend yield
-        K: float or ndarray
-            Strikes
-        N: int
-            Number of integration points
-        U_max: float
-            Upper integration limit
-
-        Returns
-        -------
-        call_prices: ndarray
-            Call prices at strikes K
-        """
         i = 1j
         K = np.atleast_1d(K)
         logK = np.log(K)[:, None]
@@ -250,33 +121,6 @@ class HestonModel:
         return call_prices
 
     def monte_carlo_call(self, T, S0, r, q, K, npaths=200000, nsteps=365, seed=None):
-        """
-        European call price via Monte Carlo simulation under the Heston model
-
-        Parameters
-        ----------
-        T: float
-            Time to maturity
-        S0: float
-            Spot price
-        r: float
-            Risk-free rate
-        q: float
-            Dividend yield
-        K: float or ndarray
-            Strikes
-        npaths: int
-            Number of simulation paths
-        nsteps: int
-            Time steps per year
-        seed: int
-            Random seed
-
-        Returns
-        -------
-        call_prices: ndarray
-            Call prices at strikes K
-        """
         K = np.atleast_1d(K)
         S, _ = self.simulate(S0, T, r, q, npaths=npaths, nsteps=nsteps, seed=seed)
         S_T = S[-1, :]
