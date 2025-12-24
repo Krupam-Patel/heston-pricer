@@ -127,3 +127,4 @@ def get_vol_slice(df_vol, T):
     sort_idx = np.argsort(moneyness)
     return moneyness[sort_idx], sigma_market[sort_idx]
 
+print("Calibration works")
