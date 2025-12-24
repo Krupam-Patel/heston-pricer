@@ -48,3 +48,6 @@ class Pricer:
 
         price = np.exp(-r*T) * np.mean(payoff)
         return price
+    
+
+print("HestonPricer works")
