@@ -1,8 +1,12 @@
 """Heston stochastic volatility model"""
+"""
+Done
+"""
+
 import numpy as np
 from scipy.interpolate import interp1d
 
-class HestonModel:
+class model:
     def __init__(self, params):
         self.params = params
         self.kappa = params['kappa']  # Mean-reversion speed of variance
@@ -87,43 +91,55 @@ class HestonModel:
         lam = 2.0 * np.pi / (N * eta)
         b = 0.5 * N * lam
         x = psi * np.exp(1j * b * v) * w
-        fft_vals = np.fft.fft(x).real
+        fft_result = np.fft.fft(x)
+        fft_vals = fft_result.real
 
         k_grid = -b + lam * np.arange(N)
         K_grid = np.exp(k_grid)
 
         call_prices_grid = np.exp(-alpha * k_grid) / np.pi * fft_vals
-        interpolator = interp1d(
+        get_price_at_strike = interp1d(
             K_grid, call_prices_grid, kind='cubic', fill_value="extrapolate"
         )
-        call_prices = interpolator(np.atleast_1d(K))
+        call_prices = get_price_at_strike(np.atleast_1d(K))
 
         return call_prices
 
     def heston_call(self, T, S0, r, q, K, N=2000, U_max=175):
         i = 1j
-        K = np.atleast_1d(K)
-        logK = np.log(K)[:, None]
-        call_prices = np.zeros_like(K, dtype=float)
+
+        K = np.array(K, ndmin=1)
+        logK = np.log(K).reshape(-1, 1)
+        call_prices = np.zeros(len(K))
 
         u = np.linspace(1e-10, U_max, N)
-        phi1 = self.heston_cf(u - i, T, S0, r, q)
-        phi2 = self.heston_cf(u, T, S0, r, q)
-        phi3 = self.heston_cf(-i, T, S0, r, q)
+        phi_shifted = self.heston_cf(u - i, T, S0, r, q)
+        phi_base = self.heston_cf(u, T, S0, r, q)
+        phi_const = self.heston_cf(-i, T, S0, r, q)
 
-        int1 = np.real(np.exp(-i * u * logK) * phi1 / (i * u * phi3))
-        int2 = np.real(np.exp(-i * u * logK) * phi2 / (i * u))
+        exp_term = np.exp(-i * u * logK)
 
+        int1 = np.real(exp_term * phi_shifted / (i * u * phi_const))
+        int2 = np.real(exp_term * phi_base / (i * u))
         P1 = 0.5 + (1 / np.pi) * np.trapz(int1, u, axis=1)
         P2 = 0.5 + (1 / np.pi) * np.trapz(int2, u, axis=1)
 
         call_prices = S0 * np.exp(-q * T) * P1 - K * np.exp(-r * T) * P2
         return call_prices
 
-    def monte_carlo_call(self, T, S0, r, q, K, npaths=200000, nsteps=365, seed=None):
-        K = np.atleast_1d(K)
+    def monte_carlo_call(self, T, S0, r, q, k, npaths=200000, nsteps=365, seed=None):
+        k = np.array(k).reshape(-1)
         S, _ = self.simulate(S0, T, r, q, npaths=npaths, nsteps=nsteps, seed=seed)
-        S_T = S[-1, :]
+        S_end = S[-1, :]
 
-        call_prices = np.exp(-r * T) * np.maximum(S_T[:, None] - K[None, :], 0).mean(axis=0)
+        S_col = S_end.reshape(-1, 1)
+        k_row = k.reshape(1, -1)
+
+        payoffs = np.maximum(S_col - k_row, 0)
+        call_prices = np.exp(-r * T) * payoffs.mean(axis=0)  
+
         return call_prices
+    
+        
+if __name__ == "__main__":
+    print("HestonModel works")
