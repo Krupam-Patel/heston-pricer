@@ -1,4 +1,7 @@
 """Heston Model Calibration via Carr–Madan FFT"""
+'''
+Done
+'''
 import numpy as np
 from scipy.optimize import minimize
 from scipy.stats import norm
@@ -14,11 +17,11 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
     x0 = [1.0, 0.4, -0.7, 0.05, 0.2]
 
     bounds = [
-        (0.01, 5),     # kappa
-        (0.05, 2),      # xi 
-        (-0.95, 1),  # rho 
-        (1e-4, 0.5),      # v0 
-        (0, 1)          # phi 
+        (0.01, 5),       # kappa
+        (0.05, 2),       # xi 
+        (-0.95, 1),      # rho 
+        (1e-4, 0.5),     # v0 
+        (0, 1)           # phi 
     ]
 
     K_market = np.atleast_1d(K_market)
@@ -55,7 +58,7 @@ def calibrate(heston_model, df_surf, S0, r, T, q=0, alpha=1.5, N_fft=4096, eta=0
         kappa, xi, rho, v0, phi = result.x
         theta = (xi**2 + phi) / (2 * kappa)
 
-        # Update calibrated parameters
+        # Updated calibrated parameters
         heston_model.kappa = kappa
         heston_model.theta = theta
         heston_model.xi = xi
