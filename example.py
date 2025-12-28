@@ -1,4 +1,7 @@
 """Heston Pricing Example (SPY Surface)"""
+"""
+Done
+"""
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -29,13 +32,8 @@ mpl.rcParams.update({
     "lines.markersize": 6,
 })
 
-init_params = dict(
-    kappa=1.0,
-    theta=0.04,
-    xi=0.4,
-    rho=-0.7,
-    v0=0.05,
-)
+init_params = dict(kappa=1.0, theta=0.04, xi=0.4, rho=-0.7, v0=0.05)
+
 model = hm(init_params)
 
 file = "SPY_Calibration_Template.xlsx"
@@ -44,7 +42,6 @@ surf = pd.read_excel(file, sheet_name="Vol_Matrix", index_col=0)
 
 T = 1.0
 
-# Risk-free rate
 rate_curve = (
     market_data[["Year_Frac", "Risk_Free_Rate"]]
     .drop_duplicates()
@@ -52,7 +49,6 @@ rate_curve = (
 )
 r = np.interp(T, rate_curve["Year_Frac"], rate_curve["Risk_Free_Rate"])
 
-# Dividend yield
 div_curve = (
     market_data[["Year_Frac", "Div_Yield"]]
     .drop_duplicates()
@@ -60,23 +56,14 @@ div_curve = (
 )
 q = np.interp(T, div_curve["Year_Frac"], div_curve["Div_Yield"])
 
-# Spot
-S0 = float(market_data["S0"].iloc[0])
+S0 = float(market_data["S0"].item())
 
-# Calibrate
 print("Calibrating Heston model...")
 res = hc.calibrate(model, surf, S0, r, T, q)
 print("Calibration result:", res)
 
-# Implied volatility surface visualizations
-# Heatmap
 fig, ax = plt.subplots()
-im = ax.imshow(
-    surf.values,
-    aspect="auto",
-    cmap="viridis",
-    origin="lower",
-)
+im = ax.imshow(surf.values, aspect="auto", cmap="viridis", origin="lower")
 fig.colorbar(im, ax=ax, label="Implied Volatility")
 
 ax.set_xticks(range(len(surf.columns)))
@@ -102,14 +89,7 @@ Z = surf.values
 fig = plt.figure(figsize=(11, 7))
 ax = fig.add_subplot(111, projection="3d")
 
-surf_plot = ax.plot_surface(
-    X_grid,
-    Y_grid,
-    Z,
-    cmap="viridis",
-    edgecolor="none",
-    antialiased=True,
-)
+surf_plot = ax.plot_surface(X_grid, Y_grid, Z, cmap="viridis", edgecolor="none", antialiased=True)
 
 ax.set_title("SPY 3D Implied Volatility Surface")
 ax.set_xlabel("Moneyness (%)")
@@ -122,27 +102,30 @@ ax.view_init(elev=25, azim=-135)
 plt.tight_layout()
 plt.savefig('spy_3d_surface.png')
 plt.close()
+
 # Volatility smiles – Heston vs Market
 fig, axes = plt.subplots(2, 2, figsize=(11, 8))
 axes = axes.flatten()
 
 T_values = [0.5, 1.0, 1.5, 2.0]
 
-for i, T_i in enumerate(T_values):
-    mny, market_vols = hc.get_vol_slice(surf, T_i)
+for i, exp_date in enumerate(T_values):
+    mny, market_vols = hc.get_vol_slice(surf, exp_date)
     K_vals = mny * S0 / 100
 
-    h_prices = model.heston_call(T_i, S0, r, q, K_vals)
-    h_iv = [
-        hc.bs_implied_vol(S0, K, T_i, r, q, C)
-        for K, C in zip(K_vals, h_prices)
-    ]
+h_prices = model.heston_call(exp_date, S0, r, q, K_vals)
+h_iv = []
+for i in range(len(K_vals)):
+    strike = K_vals[i]
+    price  = h_prices[i]
+    vol = hc.bs_implied_vol(S0, strike, exp_date, r, q, price)
+    h_iv.append(vol)
 
     ax = axes[i]
     ax.plot(mny, market_vols, "o-", label="Market IV")
     ax.plot(mny, h_iv, "s--", label="Heston IV")
 
-    ax.set_title(f"T = {T_i} years")
+    ax.set_title(f"T = {exp_date} years")
     ax.set_xlabel("Moneyness (%)")
     ax.set_ylabel("Implied Volatility")
     ax.legend()
@@ -152,7 +135,6 @@ plt.tight_layout(rect=[0, 0.02, 1, 0.96])
 plt.savefig('volatility_smiles.png')
 plt.close()
 
-# Detailed smile at calibration maturity
 mny_T, mkt_T = hc.get_vol_slice(surf, T)
 K_T = mny_T * S0 / 100
 
@@ -177,10 +159,10 @@ ax.legend()
 plt.tight_layout()
 plt.savefig('smile_comparison.png')
 plt.close()
-# Volatility process simulation
+
 S_paths, v_paths = model.simulate(S0, T, r, q, npaths=1000)
 
-# A subset of vol paths
+
 n_plot = 40
 fig, ax = plt.subplots()
 ax.plot(np.sqrt(v_paths[:, :n_plot]), alpha=0.35)
@@ -193,7 +175,6 @@ plt.tight_layout()
 plt.savefig('volatility_paths.png')
 plt.close()
 
-# Fan chart
 subset = np.sqrt(v_paths[:, :300])
 p10 = np.percentile(subset, 10, axis=1)
 p50 = np.percentile(subset, 50, axis=1)
@@ -214,7 +195,6 @@ plt.tight_layout()
 plt.savefig('volatility_fan_chart.png')
 plt.close()
 
-# Terminal price distribution
 fig, ax = plt.subplots()
 ax.hist(S_paths[-1], bins=60, density=True, alpha=0.75)
 
@@ -226,7 +206,6 @@ plt.tight_layout()
 plt.savefig('terminal_price_distribution.png')
 plt.close()
 
-# Call price comparison – MC vs CF vs FFT
 K_grid = np.linspace(0.5 * S0, 2.0 * S0, 200)
 
 mc = model.monte_carlo_call(T, S0, r, q, K_grid)
@@ -250,7 +229,6 @@ plt.tight_layout()
 plt.savefig('call_price_comparison.png')
 plt.close()
 
-# Pricing examples with Pricer
 pricer = pr(model)
 K = 200.0
 n = 1000
