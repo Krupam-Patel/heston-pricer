@@ -1,54 +1,61 @@
 """Heston Option Pricing Engine: exotic and vanilla"""
-"""
-Done
-"""
+#Fully done
 import numpy as np
 
 class pricer:
-    def __init__(self, model):
-        self.model = model
+    def price_european(self, maturity, spot, rate, div_yield, strike, option_type='Call'):
+        call_price = self.model.heston_call(maturity, spot, rate, div_yield, strike)
 
-    def european(self, T, S0, r, q, K, type='Call'):
-        call_price = self.model.heston_call(T, S0, r, q, K)
-        price = call_price if type == 'Call' else call_price - S0*np.exp(-q*T) + K*np.exp(-r*T)
-        return price[0]
+        if option_type.lower() == 'call':
+            return call_price[0]
 
+        put_price = call_price - spot * np.exp(-div_yield * maturity) + strike * np.exp(-rate * maturity)
+        return put_price[0]
 
-    def digital(self, T, S0, r, q, K, type='Call', npaths=250000, seed=None):
-        S_paths, _ = self.model.simulate(S0, T, r, q, npaths=npaths, nsteps=252, seed=seed)
-        S_first = S_paths[-1, :]
+    def price_digital(self, maturity, spot, rate, div_yield, strike, option_type='Call', n_paths=250_000, seed=None):
+        sim_paths, _ = self.model.simulate(
+            S0=spot, T=maturity, r=rate, q=div_yield,
+            npaths=n_paths, nsteps=252, seed=seed
+        )
+        term_prices = sim_paths[-1, :]
 
-        if type == 'Call':
-            price = np.exp(-r*T) * np.mean(S_first > K)
+        if option_type.lower() == 'call':
+            payoff = term_prices > strike
         else:
-            price = np.exp(-r*T) * np.mean(S_first < K)
-        return price
+            payoff = term_prices < strike
 
-    def barrier(self, T, S0, r, q, K, B, barrier_type='UpAndOut', option_type='Call',
-                npaths=250000, nsteps=365, seed=None):
-        S_paths, _ = self.model.simulate(S0, T, r, q, npaths=npaths, seed=seed)
+        disc_payoff = np.exp(-rate * maturity) * np.mean(payoff)
+        return disc_payoff
 
-        if barrier_type in ['UpAndOut', 'UpAndIn']:
-            barrier_hit = S_paths.max(axis=0) >= B
-        elif barrier_type in ['DownAndOut', 'DownAndIn']:
-            barrier_hit = S_paths.min(axis=0) <= B
+    def price_barrier( self, maturity, spot, rate, div_yield, strike, barrier, barrier_type='UpAndOut', option_type='Call',
+                      n_paths=250_000, n_steps=365, seed=None
+):
+        paths, _ = self.model.simulate(
+            S0=spot, T=maturity, r=rate, q=div_yield, npaths=n_paths,
+            nsteps=n_steps, seed=seed
+        )
+
+        if barrier_type in ('UpAndOut', 'UpAndIn'):
+            hit = paths.max(axis=0) >= barrier
+        elif barrier_type in ('DownAndOut', 'DownAndIn'):
+            hit = paths.min(axis=0) <= barrier
         else:
-            raise ValueError("Invalid barrier type.")
+            raise ValueError("Invalid barrier type")
 
-        if option_type == 'Call':
-            payoff = np.maximum(S_paths[-1, :] - K, 0)
-        elif option_type == 'Put':
-            payoff = np.maximum(K - S_paths[-1, :], 0)
+        terminal = paths[-1, :]
+        if option_type.lower() == 'call':
+            payoff = np.maximum(terminal - strike, 0)
+        elif option_type.lower() == 'put':
+            payoff = np.maximum(strike - terminal, 0)
         else:
-            raise ValueError("Invalid option type.")
+            raise ValueError("Invalid option type")
 
         if barrier_type.endswith('Out'):
-            payoff[barrier_hit] = 0
+            payoff[hit] = 0
         else:
-            payoff[~barrier_hit] = 0
+            payoff[~hit] = 0
 
-        price = np.exp(-r*T) * np.mean(payoff)
-        return price
-    
+        return np.exp(-rate * maturity) * np.mean(payoff)
+
 if __name__ == "__main__":
     print("HestonPricer works")
