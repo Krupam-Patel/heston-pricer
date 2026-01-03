@@ -2,7 +2,7 @@
 #Fully done
 import numpy as np
 
-class pricer:
+class hestonPricer:
     def price_european(self, maturity, spot, rate, div_yield, strike, option_type='Call'):
         call_price = self.model.heston_call(maturity, spot, rate, div_yield, strike)
 
