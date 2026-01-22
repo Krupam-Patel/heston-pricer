@@ -89,3 +89,5 @@ A high-level wrapper for pricing vanilla and exotic options using an instance of
 ## Example Usage
 
 See `Example.ipynb` for demonstrations of model simulation, calibration, and option pricing using the classes and functions described above.
+
+You need Python 3.10+ to run!!
