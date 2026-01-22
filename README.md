@@ -1,5 +1,7 @@
 # Heston-Pricer
 
+Working on updates currently
+
 A Heston pricing engine for valuing vanilla and exotic equity options. This repository implements the Heston stochastic volatility model, a widely used framework in quantitative finance where volatility follows a mean-reverting square-root process. The model incorporates realistic features such as volatility clustering and correlation between price and volatility.
 
 The implementation provides fast and accurate pricing for vanilla options (standard calls and puts) using the semi-closed-form Heston characteristic function, and can be extended to price more complex exotic derivatives, including barriers, digitals, and other path-dependent structures.
