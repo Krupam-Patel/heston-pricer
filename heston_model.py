@@ -1,5 +1,8 @@
 """Heston stochastic volatility model for commodities (energy, metals, ags)"""
 
+# Fully done 1/28/2026
+# Commenting done 1/28/2026
+
 import logging
 import numpy as np
 from scipy.interpolate import interp1d
@@ -10,13 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class hCommModel:
-    def __init__(self, heston_param: dict):
-        self.parameters = heston_param
-        self.kappa = heston_param["kappa"] # Variance mean-reversion speed
-        self.theta = heston_param["theta"] # Long-run variance level
-        self.xi = heston_param["xi"]   # Volatility of volatility
-        self.rho = heston_param["rho"] # Correlation between spot and variance
-        self.v0 = heston_param["v0"] # Initial variance level
+    def __init__(self, h_param: dict):
+        self.parameters = h_param
+        self.kappa = h_param["kappa"] # Variance mean-reversion speed
+        self.theta = h_param["theta"] # Long-run variance level
+        self.xi = h_param["xi"]   # Volatility of volatility
+        self.rho = h_param["rho"] # Correlation between spot and variance
+        self.v0 = h_param["v0"] # Initial variance level
         
         # Validating the Feller condition
         feller_lhs = 2.0 * self.kappa * self.theta
@@ -85,7 +88,7 @@ class hCommModel:
         return spot_paths, variance_paths
 
 
-    # Analytical pricing methods and Greeks 
+# Analytical pricing methods
     def h_char_func(self, u: np.ndarray, T: float, S0: float, r: float, q: float) -> np.ndarray:
                 # u: Fourier transform variable
                 # T: Time to maturity
@@ -118,14 +121,9 @@ class hCommModel:
             
             return cf_values
 
-# Carr-Madan damping transform of the call payoff.
-# This makes the payoff square-integrable and suitable for FFT pricing.
-    def carr_madan_call_transform(self, u: np.ndarray, T: float, S0: float, r: float, q: float, alpha: float = 1.5) -> np.ndarray:   
-            # u: Fourier transform variable
-            # T: Time to maturity
-            # S0: Initial spot price
-            # r: Risk-free rate
-            # q: Convenience yield
+# Carr-Madan damping transform of the call payoff
+# This makes the payoff square-integrable and suitable for FFT pricing
+    def carr_madan_call_transform(self, u: np.ndarray, T: float, S0: float, r: float, q: float, alpha: float = 1.5) -> np.ndarray:
             # alpha: Damping parameter (typically 1.5)
 
             u = np.atleast_1d(u)
@@ -138,34 +136,16 @@ class hCommModel:
             denom = (alpha ** 2 + alpha - u ** 2 + i * (2.0 * alpha + 1.0) * u)
             
             transform = num / denom
+
             return transform
 
-# START HERE
-# CHANGE STRIKE VARIABLE TO K
-
-    def carr_madan_call_prices(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float,
-            alpha: float = 1.5,
-            N: int = 4096,
-            eta: float = 0.25,
-        ) -> np.ndarray:
-            """
-            Fast FFT pricing for a strip of vanilla calls under Heston.
-
-            Returns call prices interpolated at requested strikes.
-            
-            Args:
-                T: Time to maturity
-                S0: Initial spot price
-                r: Risk-free rate
-                q: Convenience yield
-                strikes: Strike price(s)
-                alpha: Carr-Madan damping factor
-                N: Number of FFT grid points
-                eta: Step size in Fourier space
-                
-            Returns:
-                Call option prices at requested strikes
-            """
+# Fast FFT pricing for a strip of vanilla calls under Heston
+# Returns call prices interpolated at requested k values
+    def carr_madan_call_prices(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, alpha: float = 1.5, N: int = 4096, eta: float = 0.25) -> np.ndarray:
+                # k: Strike price(s)
+                # alpha: Carr-Madan damping factor
+                # N: Number of FFT grid points
+                # eta: Step size in Fourier space
             u_grid = np.arange(N) * eta
             transform = self.carr_madan_call_transform(u_grid, T, S0, r, q, alpha=alpha)
 
@@ -185,43 +165,22 @@ class hCommModel:
             K_grid = np.exp(log_strikes)
             C_grid = np.exp(-alpha * log_strikes) / np.pi * fft_real
 
-            strikes_array = np.atleast_1d(k)
+            k_array = np.atleast_1d(k)
             interp = interp1d(K_grid, C_grid, kind="cubic", fill_value="extrapolate")
-            prices = interp(strikes_array)
+            prices = interp(k_array)
 
-            logger.debug("Carr-Madan FFT strip: T=%.2f, S0=%.2f, strikes=%s, N=%d", T, S0, k, N)
+            logger.debug("Carr-Madan FFT strip: T=%.2f, S0=%.2f, k=%s, N=%d", T, S0, k, N)
+
             return prices
 
-
-    def heston_call_prices_trapezoid(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            N: int = 2000,
-            U_max: float = 175.0,
-        ) -> np.ndarray:
-            """
-            Heston vanilla call price using Little-Heston trapezoidal integration.
-
-            Slower than FFT but good for isolated strikes or high accuracy needs.
-            
-            Args:
-                T: Time to maturity
-                S0: Initial spot price
-                r: Risk-free rate
-                q: Convenience yield
-                strikes: Strike price(s)
-                N: Number of integration points
-                U_max: Upper bound for Fourier integration
-                
-            Returns:
-                Call option prices
-            """
+# Heston vanilla call price using Little-Heston trapezoidal integration
+# Slower than FFT but good for isolated k values or high accuracy needs
+    def h_call_prices_trapezoid(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, N: int = 2000, U_max: float = 175.0) -> np.ndarray:
+                # N: Number of integration points
+                # U_max: Upper bound for Fourier integration
             i = 1j
-            strikes_array = np.array(strikes, ndmin=1)
-            log_K = np.log(strikes_array).reshape(-1, 1)
+            k_array = np.array(k, ndmin=1)
+            log_K = np.log(k_array).reshape(-1, 1)
 
             u_grid = np.linspace(1e-10, U_max, N)
 
@@ -236,41 +195,20 @@ class hCommModel:
             P1 = 0.5 + (1.0 / np.pi) * np.trapezoid(integrand_P1, u_grid, axis=1)
             P2 = 0.5 + (1.0 / np.pi) * np.trapezoid(integrand_P2, u_grid, axis=1)
 
-            prices = S0 * np.exp(-q * T) * P1 - strikes_array * np.exp(-r * T) * P2
+            prices = S0 * np.exp(-q * T) * P1 - k_array * np.exp(-r * T) * P2
 
-            logger.debug("Heston call (Trapezoid): T=%.2f, S0=%.2f, K=%s, Umax=%.1f", T, S0, strikes, U_max)
+            logger.debug("Heston call (Trapezoid): T=%.2f, S0=%.2f, k=%s, Umax=%.1f", T, S0, k, U_max)
+
             return prices
-
-
-    def monte_carlo_call_prices(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            M: int = 200_000,
-            N: int = 365,
-            seed: int | None = None,
-        ) -> np.ndarray:
-            """
-            Monte Carlo vanilla call pricing.
-
-            Intended as a fallback for exotic payoffs or validation.
-            
-            Args:
-                T: Time to maturity
-                S0: Initial spot price
-                r: Risk-free rate
-                q: Convenience yield
-                strikes: Strike price(s)
-                M: Number of Monte Carlo paths
-                N: Time steps per year
-                seed: Random seed for reproducibility
+    
+# Monte Carlo vanilla call pricing
+# Intended as a fallback for exotic payoffs or validation
+    def monte_carlo_call_prices(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, M: int = 200_000, N: int = 365, seed: int | None = None) -> np.ndarray:
+                # M: Number of Monte Carlo paths
+                # N: Time steps per year
+                # seed: Random seed for reproducibility
                 
-            Returns:
-                Call option prices
-            """
-            strikes_array = np.array(strikes).reshape(-1)
+            k_array = np.array(k).reshape(-1)
             
             config = self.simConfig()
             config.S0 = S0
@@ -285,178 +223,99 @@ class hCommModel:
             S_T = spot_paths[-1, :]
 
             S_T_col = S_T.reshape(-1, 1)
-            K_row = strikes_array.reshape(1, -1)
+            K_row = k_array.reshape(1, -1)
             payoffs = np.maximum(S_T_col - K_row, 0.0)
             prices = np.exp(-r * T) * payoffs.mean(axis=0)
 
-            logger.debug("MC call pricing: T=%.2f, S0=%.2f, K=%s, paths=%d", T, S0, strikes, M)
+            logger.debug("MC call pricing: T=%.2f, S0=%.2f, k=%s, paths=%d", T, S0, k, M)
+
             return prices
 
 
-    # ==================== GREEKS (Risk Management) ====================
-    def delta(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            dS: float = 0.01,
-        ) -> np.ndarray:
-            """
-            Delta: sensitivity of call price to the spot price dC/dS.
+# Risk Management
+# Computed using central finite difference
+    def delta(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, dS: float = 0.01) -> np.ndarray:
             
-            Computed using central finite difference.
-            """
-            C_up = self.heston_call_prices_trapezoid(T, S0 + dS, r, q, strikes)
-            C_down = self.heston_call_prices_trapezoid(T, S0 - dS, r, q, strikes)
+            # Delta: sensitivity of call price to the spot price dC/dS
+            
+            C_up = self.h_call_prices_trapezoid(T, S0 + dS, r, q, k)
+            C_down = self.h_call_prices_trapezoid(T, S0 - dS, r, q, k)
             delta = (C_up - C_down) / (2.0 * dS)
 
-            logger.debug("Delta computed: S0=%.2f, K=%s, mean_delta=%.6f", S0, strikes, 
+            logger.debug("Delta computed: S0=%.2f, k=%s, mean_delta=%.6f", S0, k, 
                          delta.mean() if isinstance(delta, np.ndarray) else float(delta))
             return delta
 
-
-    def gamma(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            dS: float = 0.01,
-        ) -> np.ndarray:
-            """
-            Gamma: second derivative d²C/dS², curvature of the option price in spot.
+# Computed using central finite difference
+# gamma: second derivative, curvature of the option price in spot
+    def gamma(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, dS: float = 0.01) -> np.ndarray:
             
-            Computed using central finite difference.
-            """
-            C_up = self.heston_call_prices_trapezoid(T, S0 + dS, r, q, strikes)
-            C_mid = self.heston_call_prices_trapezoid(T, S0, r, q, strikes)
-            C_down = self.heston_call_prices_trapezoid(T, S0 - dS, r, q, strikes)
+            C_up = self.h_call_prices_trapezoid(T, S0 + dS, r, q, k)
+            C_mid = self.h_call_prices_trapezoid(T, S0, r, q, k)
+            C_down = self.h_call_prices_trapezoid(T, S0 - dS, r, q, k)
             gamma = (C_up - 2.0 * C_mid + C_down) / (dS ** 2)
 
-            logger.debug("Gamma computed: S0=%.2f, K=%s, mean_gamma=%.6f", S0, strikes,
+            logger.debug("Gamma computed: S0=%.2f, k=%s, mean_gamma=%.6f", S0, k,
                          gamma.mean() if isinstance(gamma, np.ndarray) else float(gamma))
+            
             return gamma
 
+# Vega: sensitivity of call price to initial variance v0 (dC/dv0)
+    def vega(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, dv: float = 0.01) -> np.ndarray:
+            # This is vega with respect to variance, not volatility
 
-    def vega(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            dv: float = 0.01,
-        ) -> np.ndarray:
-            """
-            Vega: sensitivity of call price to initial variance v0 (dC/dv0).
-            
-            Note: This is vega with respect to variance, not volatility.
-            """
             params_bumped = self.parameters.copy()
             params_bumped["v0"] = self.v0 + dv
             model_bumped = hCommModel(params_bumped)
 
-            C_bumped = model_bumped.heston_call_prices_trapezoid(T, S0, r, q, strikes)
-            C_base = self.heston_call_prices_trapezoid(T, S0, r, q, strikes)
+            C_bumped = model_bumped.h_call_prices_trapezoid(T, S0, r, q, k)
+            C_base = self.h_call_prices_trapezoid(T, S0, r, q, k)
             vega = (C_bumped - C_base) / dv
 
-            logger.debug("Vega computed: S0=%.2f, K=%s, mean_vega=%.6f", S0, strikes,
+            logger.debug("Vega computed: S0=%.2f, k=%s, mean_vega=%.6f", S0, k,
                          vega.mean() if isinstance(vega, np.ndarray) else float(vega))
+            
             return vega
 
-
-    def theta(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            dt: float = 1.0 / 365.0,
-        ) -> np.ndarray:
-            """
-            Theta: time decay of the option price dC/dT, per one day step.
-            
-            Computed using forward finite difference (T -> T - dt).
-            """
-            C_now = self.heston_call_prices_trapezoid(T, S0, r, q, strikes)
-            C_shorter = self.heston_call_prices_trapezoid(T - dt, S0, r, q, strikes)
+# Theta: time decay of the option price dC/dT, per one day step
+# Computed using forward finite difference (T -> T - dt)
+    def theta(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, dt: float = 1.0 / 365.0) -> np.ndarray:
+            C_now = self.h_call_prices_trapezoid(T, S0, r, q, k)
+            C_shorter = self.h_call_prices_trapezoid(T - dt, S0, r, q, k)
             theta = -(C_shorter - C_now) / dt
 
-            logger.debug("Theta computed: T=%.4f, S0=%.2f, K=%s, mean_theta=%.6f", T, S0, strikes,
+            logger.debug("Theta computed: T=%.4f, S0=%.2f, k=%s, mean_theta=%.6f", T, S0, k,
                          theta.mean() if isinstance(theta, np.ndarray) else float(theta))
+            
             return theta
 
-
-    def rho(self,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            strikes: np.ndarray | float,
-            dr: float = 0.001,
-        ) -> np.ndarray:
-            """
-            Rho: sensitivity of call price to the interest rate dC/dr.
-            
-            Computed using central finite difference.
-            """
-            C_up = self.heston_call_prices_trapezoid(T, S0, r + dr, q, strikes)
-            C_down = self.heston_call_prices_trapezoid(T, S0, r - dr, q, strikes)
+# Rho: sensitivity of call price to the interest rate dC/dr
+# Computed using central finite difference
+    def rho(self, T: float, S0: float, r: float, q: float, k: np.ndarray | float, dr: float = 0.001) -> np.ndarray:
+            C_up = self.h_call_prices_trapezoid(T, S0, r + dr, q, k)
+            C_down = self.h_call_prices_trapezoid(T, S0, r - dr, q, k)
             rho = (C_up - C_down) / (2.0 * dr)
 
-            logger.debug("Rho computed: S0=%.2f, K=%s, mean_rho=%.6f", S0, strikes,
+            logger.debug("Rho computed: S0=%.2f, k=%s, mean_rho=%.6f", S0, k,
                          rho.mean() if isinstance(rho, np.ndarray) else float(rho))
+            
             return rho
 
-
-    # ==================== CALIBRATION (Model Fitting) ====================
-    def calibrate_to_market(self,
-            market_prices: np.ndarray,
-            market_strikes: np.ndarray,
-            T: float,
-            S0: float,
-            r: float,
-            q: float,
-            bounds: dict | None = None,
-        ) -> dict:
-            """
-            Calibrate Heston parameters to market vanilla option prices.
-
-            Minimizes mean squared error between model prices and market prices.
-            
-            Args:
-                market_prices: Observed market prices
-                market_strikes: Corresponding strike prices
-                T: Option maturity
-                S0: Current spot price
-                r: Risk-free rate
-                q: Convenience yield
-                bounds: Optional dict of (min, max) bounds for parameters
-                
-            Returns:
-                Dictionary with calibration results
-            """
+# Calibration (Model Fitting)
+# Calibrate Heston parameters to market vanilla option prices
+# Minimizes mean squared error between model prices and market prices
+    def calibrate_to_market(self, market_prices: np.ndarray, market_k: np.ndarray, T: float, S0: float, r: float, q: float, bounds: dict | None = None) -> dict:
+            # market_prices: Observed market prices
+            # market_k: Corresponding strike prices
+            # bounds: Optional dict of (min, max) bounds for parameters
+    
             if bounds is None:
-                bounds = {
-                    "kappa": (0.01, 10.0),
-                    "theta": (0.001, 1.0),
-                    "xi": (0.01, 2.0),
-                    "rho": (-0.99, 0.99),
-                    "v0": (0.001, 1.0),
-                }
+                bounds = { "kappa": (0.01, 10.0), "theta": (0.001, 1.0), "xi": (0.01, 2.0), "rho": (-0.99, 0.99), "v0": (0.001, 1.0)}
 
-            opt_bounds = [
-                bounds["kappa"],
-                bounds["theta"],
-                bounds["xi"],
-                bounds["rho"],
-                bounds["v0"],
-            ]
+            opt_bounds = [bounds["kappa"], bounds["theta"], bounds["xi"], bounds["rho"], bounds["v0"]]
 
+# Objective function: mean squared error between model and market prices
             def objective(x: np.ndarray) -> float:
-                """
-                Objective function: mean squared error between model and market prices.
-                """
                 kappa_c, theta_c, xi_c, rho_c, v0_c = x
 
                 # Quick bounds check for safety
@@ -465,40 +324,27 @@ class hCommModel:
                     if (val < lb) or (val > ub):
                         return 1e10
 
-                temp_model = hCommModel({
-                    "kappa": kappa_c,
-                    "theta": theta_c,
-                    "xi": xi_c,
-                    "rho": rho_c,
-                    "v0": v0_c,
-                })
+                temp_model = hCommModel({ "kappa": kappa_c, "theta": theta_c, "xi": xi_c, "rho": rho_c, "v0": v0_c})
                 
                 try:
-                    model_prices = temp_model.heston_call_prices_trapezoid(T, S0, r, q, market_strikes)
+                    model_prices = temp_model.h_call_prices_trapezoid(T, S0, r, q, market_k)
                 except Exception as e:
                     logger.warning("Pricing failed during calibration: %s", e)
                     return 1e10
 
                 mse = np.mean((model_prices - market_prices) ** 2)
+
                 return mse
 
             x0 = [self.kappa, self.theta, self.xi, self.rho, self.v0]
 
-            result = minimize(objective, x0, method="L-BFGS-B", bounds=opt_bounds, 
-                              options={"maxiter": 500, "ftol": 1e-8})
+            result = minimize(objective, x0, method="L-BFGS-B", bounds=opt_bounds, options={"maxiter": 500, "ftol": 1e-8})
 
             kappa_cal, theta_cal, xi_cal, rho_cal, v0_cal = result.x
 
-            params_cal = {
-                "kappa": kappa_cal,
-                "theta": theta_cal,
-                "xi": xi_cal,
-                "rho": rho_cal,
-                "v0": v0_cal,
-            }
+            params_cal = {"kappa": kappa_cal, "theta": theta_cal, "xi": xi_cal, "rho": rho_cal, "v0": v0_cal}
 
-            logger.info("Calibration complete: success=%s, MSE=%.6f, "
-                        "kappa=%.4f, theta=%.4f, xi=%.4f, rho=%.4f, v0=%.4f",
+            logger.info("Calibration complete: success=%s, MSE=%.6f, " "kappa=%.4f, theta=%.4f, xi=%.4f, rho=%.4f, v0=%.4f",
                         result.success, result.fun, kappa_cal, theta_cal, xi_cal, rho_cal, v0_cal)
 
             # Update internal parameters to calibrated values
@@ -509,42 +355,28 @@ class hCommModel:
             self.rho = rho_cal
             self.v0 = v0_cal
 
-            return {
-                "success": result.success,
-                "mse": result.fun,
-                "params": params_cal,
-                "iterations": result.nit,
-            }
+            return {"success": result.success, "mse": result.fun, "params": params_cal, "iterations": result.nit}
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     
     # Example usage
-    heston_params = {
-        "kappa": 2.0,
-        "theta": 0.04,
-        "xi": 0.3,
-        "rho": -0.7,
-        "v0": 0.04,
-    }
+    h_params = {"kappa": 2.0, "theta": 0.04, "xi": 0.3, "rho": -0.7, "v0": 0.04}
     
-    model = hCommModel(heston_params)
+    model = hCommModel(h_params)
     
     # Price a call option
     S0 = 100.0
-    K = 100.0
+    k = 100.0
     T = 1.0
     r = 0.05
     q = 0.02
     
-    price_fft = model.carr_madan_call_prices(T, S0, r, q, K)
-    price_trap = model.heston_call_prices_trapezoid(T, S0, r, q, K)
+    price_fft = model.carr_madan_call_prices(T, S0, r, q, k)
+    price_trap = model.h_call_prices_trapezoid(T, S0, r, q, k)
     
     logger.info("Call price (FFT): %.4f", price_fft[0])
     logger.info("Call price (Trapezoid): %.4f", price_trap[0])
     
-    logger.info("Heston Commodity Model module loaded")
+    logger.info("Heston Commodity Model module is good")
