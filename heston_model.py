@@ -4,8 +4,7 @@ import logging
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
-
-from example import S0  # Commodity spot
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -13,73 +12,128 @@ logger = logging.getLogger(__name__)
 class hCommModel:
     def __init__(self, heston_param: dict):
         self.parameters = heston_param
-        self.kappa = heston_param["kappa"] # Variance mean-rever speed (typically high for commodities).
-        self.theta = heston_param["theta"] # Long-run variance level (captures volatility clustering).
-        self.xi = heston_param["xi"] # Vol-of-vol (drives size of variance jumps/spikes).
-        self.rho = heston_param["rho"] # Correlation between spot and variance Brownian motions (often negative).
-        self.v0 = heston_param["v0"] # Initial variance level (current/implied variance at t=0).
-        logger.info("Initialized hCommModel: " "kappa=%.5f, theta=%.5f, xi=%.5f, rho=%.5f, v0=%.5f",
-                    self.kappa, self.theta, self.xi, self.rho, self.v0)
+        self.kappa = heston_param["kappa"] # Variance mean-reversion speed
+        self.theta = heston_param["theta"] # Long-run variance level
+        self.xi = heston_param["xi"]   # Volatility of volatility
+        self.rho = heston_param["rho"] # Correlation between spot and variance
+        self.v0 = heston_param["v0"] # Initial variance level
+        
+        # Validating the Feller condition
+        feller_lhs = 2.0 * self.kappa * self.theta
+        feller_rhs = self.xi ** 2
+        if feller_lhs < feller_rhs:
+            logger.warning("Feller condition violated: 2*kappa*theta (%.4f) < xi^2 (%.4f). " 
+                           "Variance process may reach zero.", feller_lhs, feller_rhs)
+        
+        logger.info("Initialized hCommModel: "
+            "kappa=%.5f, theta=%.5f, xi=%.5f, rho=%.5f, v0=%.5f", self.kappa, self.theta, self.xi, self.rho, self.v0)
+        
 
-# Core simulations 
-    def sim(self, S0: float, maturity: float, r: float, q: float, num_paths: int = 243, num_time_steps: int = 365, random_seed: int | None = None, 
-            mean_rever_speed: float = 0.0, mean_rever_level: float = 0.0, seasonal_amp: float = 0.0, seasonal_phase: float = 0.0,) -> tuple[np.ndarray, np.ndarray]:
-        if random_seed is not None:
-            np.random.seed(random_seed)
+    class simConfig:
+        S0: float # Initial spot price
+        T: float # Time to maturity (years)
+        r: float # Risk-free rate
+        q: float # Convenience yield
+        
+        # Simulation parameters
+        M: int = 10000 # Number of paths
+        N: int = 365 # Number of time steps
+        seed: int | None = None # Random seed
+        
+        # Mean reversion overlay (aka the spot price)
+        alpha: float = 0.0 # Mean reversion speed
+        mu: float = 0.0 # Long-term mean level
+        
+        # Seasonality overlay (some commodities do better in certain months)
+        A: float = 0.0 # Seasonal amplitude
+        phi: float = 0.0 # Seasonal phase
 
-        total_time_steps = round(num_time_steps * maturity)
-        time_step_size = maturity / total_time_steps
 
-        var_paths = np.zeros((total_time_steps + 1, num_paths))
-        spot_paths = np.zeros((total_time_steps + 1, num_paths))
+    def simulate(self, config: simConfig) -> tuple[np.ndarray, np.ndarray]:
+        if config.seed is not None:
+            np.random.seed(config.seed)
 
-        var_paths[0] = self.v0
-        spot_paths[0] = S0
+        dt = config.T / config.N
 
-        for time_step_index in range(1, total_time_steps + 1):
-            # Correlated Brownian motions (H structure)
-            spot_brownian = np.random.normal(loc=0.0, scale=np.sqrt(time_step_size), size=num_paths)
-            indep_brownian = np.random.normal(loc=0.0, scale=np.sqrt(time_step_size), size=num_paths)
-            var_brownian = (self.rho * spot_brownian + np.sqrt(1.0 - self.rho**2) * indep_brownian)
-            # CIR var process (var must stay non-negative)
-            previous_var = np.maximum(var_paths[time_step_index - 1], 0.0)
-            var_paths[time_step_index] = (var_paths[time_step_index - 1] + self.kappa * (self.theta - previous_var) * time_step_size + self.xi * 
-                                          np.sqrt(previous_var) * var_brownian)
-            var_paths[time_step_index] = np.maximum(var_paths[time_step_index], 0.0)
+        variance_paths = np.zeros((config.N + 1, config.M))
+        spot_paths = np.zeros((config.N + 1, config.M))
 
-            # Commodity SDE with mean rever and seasonality overlays
-            base_drift_term = (r - q - 0.5 * previous_var) * time_step_size
-            seasonal_drift_term = seasonal_amp * np.sin(2.0 * np.pi * (time_step_index * time_step_size + seasonal_phase) / maturity)
-            mean_rever_drift_term = (mean_rever_speed * (mean_rever_level - spot_paths[time_step_index - 1]) * time_step_size)
-            total_drift_term = (base_drift_term + seasonal_drift_term + mean_rever_drift_term)
-            diffusion_term = np.sqrt(previous_var) * spot_brownian
+        variance_paths[0] = self.v0
+        spot_paths[0] = config.S0
 
-            spot_paths[time_step_index] = spot_paths[time_step_index - 1] * np.exp(total_drift_term + diffusion_term)
+        for t in range(1, config.N + 1):
+            # Correlated Brownian motions (Heston structure) (also dW is just a short form for Brownian)
+            dW_S = np.random.normal(0.0, np.sqrt(dt), config.M)
+            dW_indep = np.random.normal(0.0, np.sqrt(dt), config.M)
+            dW_v = self.rho * dW_S + np.sqrt(1.0 - self.rho ** 2) * dW_indep
 
-        logger.debug("Commodity paths simulated: S0=%.2f, T=%.2f, paths=%d, steps=%d " "(seasonal_active=%s, mean_rever_active=%s)",
-                    S0, maturity, num_paths, num_time_steps, bool(seasonal_amp), bool(mean_rever_speed))
+            # CIR variance process (ensure non-negative)
+            v_prev = np.maximum(variance_paths[t - 1], 0.0)
+            variance_paths[t] = (
+                variance_paths[t - 1] + 
+                self.kappa * (self.theta - v_prev) * dt + 
+                self.xi * np.sqrt(v_prev) * dW_v
+            )
+            variance_paths[t] = np.maximum(variance_paths[t], 0.0)
 
-        return spot_paths, var_paths
+            # Commodity spot price SDE with overlays
+            drift = (
+                (config.r - config.q - 0.5 * v_prev) * dt +
+                config.A * np.sin(2.0 * np.pi * (t * dt + config.phi) / config.T) +
+                config.alpha * (config.mu - spot_paths[t - 1]) * dt
+            )
+            diffusion = np.sqrt(v_prev) * dW_S
 
-# Analytical Pricing (Fast vanilla)
-## START HERE
-    def heston_char_function(self, fourier_var: np.ndarray, maturity_time_years: float, initial_spot_price: float, 
-                             risk_free_rate: float, convenience_yield: float,) -> np.ndarray:
-        fourier_var = np.atleast_1d(fourier_var)
+            spot_paths[t] = spot_paths[t - 1] * np.exp(drift + diffusion)
+
+        logger.debug(
+            "Commodity paths simulated: S0=%.2f, T=%.2f, M=%d, N=%d "
+            "(seasonal=%s, mean_reversion=%s)",
+            config.S0, config.T, config.M, config.N,
+            bool(config.A), bool(config.alpha)
+        )
+
+        return spot_paths, variance_paths
+
+    # ==================== ANALYTICAL PRICING ====================
+    def heston_characteristic_function(
+        self,
+        fourier_variable: np.ndarray,
+        maturity_time_years: float,
+        initial_spot_price: float,
+        risk_free_rate: float,
+        convenience_yield: float,
+    ) -> np.ndarray:
+        """
+        Heston characteristic function in the Fourier domain.
+        
+        This is the key analytical ingredient for FFT and semi-analytical pricing.
+        
+        Args:
+            fourier_variable: Fourier transform variable (can be array)
+            maturity_time_years: Time to maturity
+            initial_spot_price: Current spot price
+            risk_free_rate: Risk-free rate
+            convenience_yield: Convenience yield
+            
+        Returns:
+            Characteristic function values
+        """
+        fourier_variable = np.atleast_1d(fourier_variable)
         imaginary_unit = 1j
         log_initial_spot = np.log(initial_spot_price)
 
-        mean_var_product = self.kappa * self.theta
-        mean_rever_term = (
-            self.kappa - self.rho * self.xi * imaginary_unit * fourier_var
+        mean_variance_product = self.kappa * self.theta
+        mean_reversion_term = (
+            self.kappa - self.rho * self.xi * imaginary_unit * fourier_variable
         )
         discriminant_term = np.sqrt(
-            mean_rever_term**2
-            + (self.xi**2)
-            * (imaginary_unit * fourier_var + fourier_var * fourier_var)
+            mean_reversion_term ** 2
+            + (self.xi ** 2)
+            * (imaginary_unit * fourier_variable + fourier_variable * fourier_variable)
         )
-        discriminant_ratio = (mean_rever_term - discriminant_term) / (
-            mean_rever_term + discriminant_term
+        discriminant_ratio = (mean_reversion_term - discriminant_term) / (
+            mean_reversion_term + discriminant_term
         )
 
         exponential_discriminant = np.exp(-discriminant_term * maturity_time_years)
@@ -88,31 +142,31 @@ class hCommModel:
         )
         ratio_denominator = np.clip(1.0 - discriminant_ratio, 1e-15, None)
 
-        log_char_function = (
+        log_characteristic_function = (
             imaginary_unit
-            * fourier_var
+            * fourier_variable
             * (risk_free_rate - convenience_yield)
             * maturity_time_years
-            + (mean_var_product / (self.xi**2))
+            + (mean_variance_product / (self.xi ** 2))
             * (
-                (mean_rever_term - discriminant_term) * maturity_time_years
+                (mean_reversion_term - discriminant_term) * maturity_time_years
                 - 2.0 * np.log(ratio_numerator / ratio_denominator)
             )
         )
 
-        var_scaling_term = (
-            (mean_rever_term - discriminant_term) / (self.xi**2)
+        variance_scaling_term = (
+            (mean_reversion_term - discriminant_term) / (self.xi ** 2)
         ) * ((1.0 - exponential_discriminant) / ratio_numerator)
 
-        char_function_values = np.exp(
-            log_char_function
-            + var_scaling_term * self.v0
-            + imaginary_unit * fourier_var * log_initial_spot
+        characteristic_function_values = np.exp(
+            log_characteristic_function
+            + variance_scaling_term * self.v0
+            + imaginary_unit * fourier_variable * log_initial_spot
         )
 
-        if char_function_values.size == 1:
-            return char_function_values[0]
-        return char_function_values
+        if characteristic_function_values.size == 1:
+            return characteristic_function_values[0]
+        return characteristic_function_values
 
     def carr_madan_call_transform(
         self,
@@ -127,24 +181,35 @@ class hCommModel:
         Carr-Madan damping transform of the call payoff.
 
         This makes the payoff square-integrable and suitable for FFT pricing.
+        
+        Args:
+            fourier_grid: Grid of Fourier variables
+            maturity_time_years: Time to maturity
+            initial_spot_price: Current spot price
+            risk_free_rate: Risk-free rate
+            convenience_yield: Convenience yield
+            damping_factor: Damping parameter (typically 1.5)
+            
+        Returns:
+            Transformed payoff values
         """
         fourier_grid = np.atleast_1d(fourier_grid)
         imaginary_unit = 1j
 
-        shifted_char_function = self.heston_char_function(
-                fourier_grid - (damping_factor + 1.0) * imaginary_unit,
-                maturity_time_years,
-                initial_spot_price,
-                risk_free_rate,
-                convenience_yield,
-            )
+        shifted_characteristic_function = self.heston_characteristic_function(
+            fourier_grid - (damping_factor + 1.0) * imaginary_unit,
+            maturity_time_years,
+            initial_spot_price,
+            risk_free_rate,
+            convenience_yield,
+        )
 
         discounted_factor = np.exp(-risk_free_rate * maturity_time_years)
-        numerator = discounted_factor * shifted_char_function
+        numerator = discounted_factor * shifted_characteristic_function
         denominator = (
-            damping_factor**2
+            damping_factor ** 2
             + damping_factor
-            - fourier_grid**2
+            - fourier_grid ** 2
             + imaginary_unit * (2.0 * damping_factor + 1.0) * fourier_grid
         )
         transformed_payoff = numerator / denominator
@@ -159,12 +224,25 @@ class hCommModel:
         strikes: np.ndarray | float,
         damping_factor: float = 1.5,
         num_fft_points: int = 4096,
-        fourier_step_size: float = 0.225,
+        fourier_step_size: float = 0.25,
     ) -> np.ndarray:
         """
-        Fast FFT pricing for a strip of vanilla calls under H.
+        Fast FFT pricing for a strip of vanilla calls under Heston.
 
         Returns call prices interpolated at requested strikes.
+        
+        Args:
+            maturity_time_years: Time to maturity
+            initial_spot_price: Current spot price
+            risk_free_rate: Risk-free rate
+            convenience_yield: Convenience yield
+            strikes: Strike price(s)
+            damping_factor: Carr-Madan damping factor
+            num_fft_points: Number of FFT grid points
+            fourier_step_size: Step size in Fourier space
+            
+        Returns:
+            Call option prices at requested strikes
         """
         fourier_grid = np.arange(num_fft_points) * fourier_step_size
         transformed_payoff = self.carr_madan_call_transform(
@@ -218,7 +296,7 @@ class hCommModel:
         )
         return interpolated_call_prices
 
-    def h_call_prices_trapezoid(
+    def heston_call_prices_trapezoid(
         self,
         maturity_time_years: float,
         initial_spot_price: float,
@@ -229,9 +307,21 @@ class hCommModel:
         fourier_upper_bound: float = 175.0,
     ) -> np.ndarray:
         """
-        H vanilla call price using Little Trapezoid integration (single-strike accurate).
+        Heston vanilla call price using Little-Heston trapezoidal integration.
 
-        Slower than FFT but good for isolated strikes.
+        Slower than FFT but good for isolated strikes or high accuracy needs.
+        
+        Args:
+            maturity_time_years: Time to maturity
+            initial_spot_price: Current spot price
+            risk_free_rate: Risk-free rate
+            convenience_yield: Convenience yield
+            strikes: Strike price(s)
+            num_integration_points: Number of integration points
+            fourier_upper_bound: Upper bound for Fourier integration
+            
+        Returns:
+            Call option prices
         """
         imaginary_unit = 1j
         strikes_array = np.array(strikes, ndmin=1)
@@ -241,21 +331,21 @@ class hCommModel:
             1e-10, fourier_upper_bound, num_integration_points
         )
 
-        shifted_char_function = self.h_char_function(
+        shifted_characteristic_function = self.heston_characteristic_function(
             fourier_grid - imaginary_unit,
             maturity_time_years,
             initial_spot_price,
             risk_free_rate,
             convenience_yield,
         )
-        char_function_base = self.h_char_function(
+        characteristic_function_base = self.heston_characteristic_function(
             fourier_grid,
             maturity_time_years,
             initial_spot_price,
             risk_free_rate,
             convenience_yield,
         )
-        char_function_normalizer = self.h_char_function(
+        characteristic_function_normalizer = self.heston_characteristic_function(
             -imaginary_unit,
             maturity_time_years,
             initial_spot_price,
@@ -266,17 +356,19 @@ class hCommModel:
         exponential_term = np.exp(-imaginary_unit * fourier_grid * log_strikes)
         integrand_P1 = np.real(
             exponential_term
-            * shifted_char_function
-            / (imaginary_unit * fourier_grid * char_function_normalizer)
+            * shifted_characteristic_function
+            / (imaginary_unit * fourier_grid * characteristic_function_normalizer)
         )
         integrand_P2 = np.real(
-            exponential_term * char_function_base / (imaginary_unit * fourier_grid)
+            exponential_term
+            * characteristic_function_base
+            / (imaginary_unit * fourier_grid)
         )
 
-        probability_P1 = 0.5 + (1.0 / np.pi) * np.trapz(
+        probability_P1 = 0.5 + (1.0 / np.pi) * np.trapezoid(
             integrand_P1, fourier_grid, axis=1
         )
-        probability_P2 = 0.5 + (1.0 / np.pi) * np.trapz(
+        probability_P2 = 0.5 + (1.0 / np.pi) * np.trapezoid(
             integrand_P2, fourier_grid, axis=1
         )
 
@@ -290,7 +382,7 @@ class hCommModel:
         )
 
         logger.debug(
-            "H call (Trapezoid): T=%.2f, S0=%.2f, K=%s, Umax=%.1f",
+            "Heston call (Trapezoid): T=%.2f, S0=%.2f, K=%s, Umax=%.1f",
             maturity_time_years,
             initial_spot_price,
             strikes,
@@ -312,7 +404,20 @@ class hCommModel:
         """
         Monte Carlo vanilla call pricing.
 
-        Intended as a fallback for exotic payoffs sharing the same path engine.
+        Intended as a fallback for exotic payoffs or validation.
+        
+        Args:
+            maturity_time_years: Time to maturity
+            initial_spot_price: Current spot price
+            risk_free_rate: Risk-free rate
+            convenience_yield: Convenience yield
+            strikes: Strike price(s)
+            num_paths: Number of Monte Carlo paths
+            num_time_steps: Time steps per year
+            random_seed: Random seed for reproducibility
+            
+        Returns:
+            Call option prices
         """
         strikes_array = np.array(strikes).reshape(-1)
         spot_paths, _ = self.simulate(
@@ -330,8 +435,7 @@ class hCommModel:
         strike_row = strikes_array.reshape(1, -1)
         payoff_matrix = np.maximum(terminal_spot_column - strike_row, 0.0)
         discounted_call_prices = (
-            np.exp(-risk_free_rate * maturity_time_years)
-            * payoff_matrix.mean(axis=0)
+            np.exp(-risk_free_rate * maturity_time_years) * payoff_matrix.mean(axis=0)
         )
 
         logger.debug(
@@ -355,15 +459,17 @@ class hCommModel:
     ) -> np.ndarray:
         """
         Delta: sensitivity of call price to the spot price dC/dS.
+        
+        Computed using central finite difference.
         """
-        call_prices_up = self.h_call_prices_trapezoid(
+        call_prices_up = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price + spot_bump_size,
             risk_free_rate,
             convenience_yield,
             strikes,
         )
-        call_prices_down = self.h_call_prices_trapezoid(
+        call_prices_down = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price - spot_bump_size,
             risk_free_rate,
@@ -393,22 +499,24 @@ class hCommModel:
     ) -> np.ndarray:
         """
         Gamma: second derivative d²C/dS², curvature of the option price in spot.
+        
+        Computed using central finite difference.
         """
-        call_prices_up = self.h_call_prices_trapezoid(
+        call_prices_up = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price + spot_bump_size,
             risk_free_rate,
             convenience_yield,
             strikes,
         )
-        call_prices_mid = self.h_call_prices_trapezoid(
+        call_prices_mid = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price,
             risk_free_rate,
             convenience_yield,
             strikes,
         )
-        call_prices_down = self.h_call_prices_trapezoid(
+        call_prices_down = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price - spot_bump_size,
             risk_free_rate,
@@ -417,7 +525,7 @@ class hCommModel:
         )
         gamma_values = (
             call_prices_up - 2.0 * call_prices_mid + call_prices_down
-        ) / (spot_bump_size**2)
+        ) / (spot_bump_size ** 2)
 
         logger.debug(
             "Gamma computed: S0=%.2f, K=%s, mean_gamma=%.6f",
@@ -440,19 +548,21 @@ class hCommModel:
     ) -> np.ndarray:
         """
         Vega: sensitivity of call price to initial variance v0 (dC/dv0).
+        
+        Note: This is vega with respect to variance, not volatility.
         """
         bumped_parameters = self.parameters.copy()
         bumped_parameters["v0"] = self.v0 + variance_bump_size
         bumped_model = hCommModel(bumped_parameters)
 
-        call_prices_bumped = bumped_model.h_call_prices_trapezoid(
+        call_prices_bumped = bumped_model.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price,
             risk_free_rate,
             convenience_yield,
             strikes,
         )
-        call_prices_base = self.h_call_prices_trapezoid(
+        call_prices_base = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price,
             risk_free_rate,
@@ -482,15 +592,17 @@ class hCommModel:
     ) -> np.ndarray:
         """
         Theta: time decay of the option price dC/dT, per one day step.
+        
+        Computed using forward finite difference (T -> T - dt).
         """
-        call_prices_now = self.h_call_prices_trapezoid(
+        call_prices_now = self.heston_call_prices_trapezoid(
             maturity_time_years,
             initial_spot_price,
             risk_free_rate,
             convenience_yield,
             strikes,
         )
-        call_prices_shorter_maturity = self.h_call_prices_trapezoid(
+        call_prices_shorter_maturity = self.heston_call_prices_trapezoid(
             maturity_time_years - time_bump_size,
             initial_spot_price,
             risk_free_rate,
@@ -523,6 +635,8 @@ class hCommModel:
     ) -> np.ndarray:
         """
         Rho: sensitivity of call price to the interest rate dC/dr.
+        
+        Computed using central finite difference.
         """
         call_prices_up = self.heston_call_prices_trapezoid(
             maturity_time_years,
@@ -565,14 +679,26 @@ class hCommModel:
         Calibrate Heston parameters to market vanilla option prices.
 
         Minimizes mean squared error between model prices and market prices.
+        
+        Args:
+            market_option_prices: Observed market prices
+            market_strikes: Corresponding strike prices
+            maturity_time_years: Option maturity
+            initial_spot_price: Current spot price
+            risk_free_rate: Risk-free rate
+            convenience_yield: Convenience yield
+            parameter_bounds: Optional dict of (min, max) bounds for parameters
+            
+        Returns:
+            Dictionary with calibration results
         """
         if parameter_bounds is None:
             parameter_bounds = {
-                "kappa": (0.01, 5.0),   # Mean-rever speed of variance
-                "theta": (0.01, 1.0),   # Long-run variance level
-                "xi": (0.01, 2.0),      # Volatility of volatility
-                "rho": (-0.99, 0.99),   # Spot/variance correlation
-                "v0": (0.001, 1.0),     # Initial variance level
+                "kappa": (0.01, 10.0),
+                "theta": (0.001, 1.0),
+                "xi": (0.01, 2.0),
+                "rho": (-0.99, 0.99),
+                "v0": (0.001, 1.0),
             }
 
         optimization_bounds = [
@@ -598,7 +724,9 @@ class hCommModel:
             # Quick bounds check for safety
             for index, parameter_value in enumerate(parameter_vector):
                 lower_bound, upper_bound = optimization_bounds[index]
-                if (parameter_value < lower_bound) or (parameter_value > upper_bound):
+                if (parameter_value < lower_bound) or (
+                    parameter_value > upper_bound
+                ):
                     return 1e10
 
             temporary_model = hCommModel(
@@ -610,17 +738,20 @@ class hCommModel:
                     "v0": candidate_v0,
                 }
             )
-            model_generated_prices = temporary_model.heston_call_prices_trapezoid(
-                maturity_time_years,
-                initial_spot_price,
-                risk_free_rate,
-                convenience_yield,
-                market_strikes,
-            )
+            
+            try:
+                model_generated_prices = temporary_model.heston_call_prices_trapezoid(
+                    maturity_time_years,
+                    initial_spot_price,
+                    risk_free_rate,
+                    convenience_yield,
+                    market_strikes,
+                )
+            except Exception as e:
+                logger.warning("Pricing failed during calibration: %s", e)
+                return 1e10
 
-            mse_value = np.mean(
-                (model_generated_prices - market_option_prices) ** 2
-            )
+            mse_value = np.mean((model_generated_prices - market_option_prices) ** 2)
             return mse_value
 
         initial_guess = [
@@ -639,9 +770,13 @@ class hCommModel:
             options={"maxiter": 500, "ftol": 1e-8},
         )
 
-        calibrated_kappa, calibrated_theta, calibrated_xi, calibrated_rho, calibrated_v0 = (
-            optimization_result.x
-        )
+        (
+            calibrated_kappa,
+            calibrated_theta,
+            calibrated_xi,
+            calibrated_rho,
+            calibrated_v0,
+        ) = optimization_result.x
 
         calibrated_parameters = {
             "kappa": calibrated_kappa,
@@ -684,4 +819,29 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    logger.info("HestonCommodityModel (commodities) module loaded")
+    
+    # Example usage
+    heston_params = {
+        "kappa": 2.0,
+        "theta": 0.04,
+        "xi": 0.3,
+        "rho": -0.7,
+        "v0": 0.04,
+    }
+    
+    model = hCommModel(heston_params)
+    
+    # Price a call option
+    S0 = 100.0
+    K = 100.0
+    T = 1.0
+    r = 0.05
+    q = 0.02
+    
+    price_fft = model.carr_madan_call_prices(T, S0, r, q, K)
+    price_trap = model.heston_call_prices_trapezoid(T, S0, r, q, K)
+    
+    logger.info("Call price (FFT): %.4f", price_fft[0])
+    logger.info("Call price (Trapezoid): %.4f", price_trap[0])
+    
+    logger.info("Heston Commodity Model module loaded")
