@@ -53,22 +53,21 @@ class hCommCalibrator:
                 # Creating temporary model with these parameters
                 temp_model = hCommModel(temp_params)
                 
-                # Price using Carr-Madan FFT
+                # Prices using Carr-Madan FFT
                 model_prices = temp_model.carr_madan_call_prices(T, S0, r, q, strikes, alpha=alpha, N=N_fft, eta=eta)
                 
-                # Mean squared error
                 mse = np.mean((model_prices - market_prices)**2)
                 
                 penalty = 0.0
                 
-                # Penalize very high kappa and rho
+                # Penalizes very high kappa and rho
                 if kappa > 5.0:
                     penalty += 10 * (kappa - 5.0)**2
                 
                 if abs(rho) > 0.9:
                     penalty += 100 * (abs(rho) - 0.9)**2
                 
-                # Check Feller condition (should be satisfied by construction)
+                # Checks Feller condition (should be satisfied by construction)
                 feller_lhs = 2 * kappa * theta
                 feller_rhs = xi**2
                 if feller_lhs < feller_rhs:
@@ -93,18 +92,18 @@ class hCommCalibrator:
             kappa, xi, rho, v0, theta_scale = result.x
             theta = (xi**2 * theta_scale) / (2 * kappa)
             
-            # Update model with calibrated parameters
+            # Updates model with new calibrated parameters if needed
+            self.model.parameters = {"kappa": kappa, "theta": theta, "xi": xi, "rho": rho, "v0": v0}
             self.model.kappa = kappa
             self.model.theta = theta
             self.model.xi = xi
             self.model.rho = rho
             self.model.v0 = v0
-            self.model.parameters = {"kappa": kappa, "theta": theta, "xi": xi, "rho": rho, "v0": v0}
             
-            # Compute final model prices for diagnostics
+            # Computes final model prices for diagnostics
             final_prices = self.model.carr_madan_call_prices(T, S0, r, q, strikes, alpha=alpha, N=N_fft, eta=eta)
             
-            # Calculate pricing errors
+            # Calculates pricing errors
             abs_errors = final_prices - market_prices
             pct_errors = (abs_errors / market_prices) * 100
             
@@ -121,7 +120,7 @@ class hCommCalibrator:
             if feller_lhs < feller_rhs:
                 print("Warning: Feller condition NOT satisfied!\n")
             
-            # Print market vs model comparison
+            # Prints market vs model comparison
             print("Market vs Model price differences (%):")
             for k, cm, cm_model, mn in zip(strikes, market_prices, final_prices, moneyness):
                 dif = (cm_model - cm) / cm * 100
@@ -197,12 +196,13 @@ class hCommCalibrator:
             kappa, xi, rho, v0, theta_scale = result.x
             theta = (xi**2 * theta_scale) / (2 * kappa)
             
+            # Updates model with new calibrated parameters if needed
+            self.model.parameters = {"kappa": kappa, "theta": theta, "xi": xi, "rho": rho, "v0": v0}
             self.model.kappa = kappa
             self.model.theta = theta
             self.model.xi = xi
             self.model.rho = rho
             self.model.v0 = v0
-            self.model.parameters = {"kappa": kappa, "theta": theta, "xi": xi, "rho": rho, "v0": v0}
             
             print("Multi-T calibration successful:")
             print(f"Calibrated to {len(Ts)} Ts: {Ts}")
@@ -227,7 +227,7 @@ class hCommCalibrator:
             "xi": (0.1, 3.0), # Higher vol of vol
             "rho": (-0.95, 0.5), # Typically negative for commodities
             "v0": (0.001, 1.0), # Initial variance
-            "theta_scale": (0.1, 2.0)} # Ensures Feller via theta = xi^2*scale/(2*kappa)
+            "theta_scale": (0.1, 2.0)} # Ensures Feller via theta
     
 
     def get_volatility_slice(self, df_vol, T):
@@ -242,12 +242,11 @@ class hCommCalibrator:
             sigma_market.append(interp_func(T))
         
         sigma_market = np.array(sigma_market)
-        sort_idx = np.argsort(moneyness)
         
-        return moneyness[sort_idx], sigma_market[sort_idx]
+        return moneyness, sigma_market
     
     def bs_call_prices(self, S0, K, T, r, q, sigma):
-        # Black-Scholes call price (used for market price conversion)
+        # bs call price (used for market price conversion)
         K = np.atleast_1d(K)
         sigma = np.atleast_1d(sigma)
         
@@ -258,7 +257,7 @@ class hCommCalibrator:
         return np.exp(-r * T) * (F * norm.cdf(d1) - K * norm.cdf(d2))
     
     def bs_implied_vol(self, S0, K, T, r, q, market_price):
-        # Compute Black-Scholes implied volatility
+        # Computing the bs implied volatility
         def objective(sigma):
             return self.bs_call_prices(S0, K, T, r, q, sigma) - market_price
         
@@ -271,7 +270,7 @@ class hCommCalibrator:
 def calibrate(heston_model, df_surf, S0, r, T, convenience_yield=0.0, alpha=1.5, N_fft=4096, eta=0.225):
     # Convenience function for single-maturity calibration
     calibrator = hCommCalibrator(heston_model)
-    return calibrator.calibrate_single_maturity(df_surf, T, S0, r, convenience_yield, alpha=alpha, N_fft=N_fft, eta=eta)
+    return calibrator.calibrate_single_T(df_surf, T, S0, r, convenience_yield, alpha=alpha, N_fft=N_fft, eta=eta)
 
 
 if __name__ == "__main__":
