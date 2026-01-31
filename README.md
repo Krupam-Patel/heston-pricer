@@ -88,8 +88,21 @@ A high-level wrapper for pricing vanilla and exotic options using an instance of
 
 ---
 
-## Example Usage
-
-See `Example.ipynb` for demonstrations of model simulation, calibration, and option pricing using the classes and functions described above.
-
 You need Python 3.10+ to run!!
+
+
+## Sources I used to make this algorithm 
+
+- Perplexity / ChatGPT / Claude
+- A lottttt of Youtube (Especially Nicholas Burgess (https://www.youtube.com/@AlgoQuantHub)
+    - The absolute goat and really suggest you watch him 
+- https://www.tutorialspoint.com/scipy/scipy_interpolate_pchipinterpolator_function.htm
+- https://docs.python.org/3/howto/logging.html
+- https://peps.python.org/pep-0557
+
+### Research Papers
+- https://econpapers.repec.org/article/ouprfinst/v_3a6_3ay_3a1993_3ai_3a2_3ap_3a327-43.htm (Steven L Heston [The goat himself that made og equation])
+- https://xilinx.github.io/Vitis_Libraries/quantitative_finance/2020.1/methods/cf-ht.html (Crisostomo)
+- https://arxiv.org/abs/1511.08718 (Yiran Cui, Sebastian del Baño Rollin, Guido Germano)
+- https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1614796 (Zhan Chen)
+
