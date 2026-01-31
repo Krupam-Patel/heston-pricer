@@ -1,5 +1,6 @@
 # Heston-Pricer
 
+Hi!! So GitHub has a 1MB max upload, so if you want to look at bigger images, they are in a separate file. Please reach out if there's anything else you find interesting or any comments! 
 
 A Heston pricing engine for valuing vanilla and exotic equity options. This repository implements the Heston stochastic volatility model, a widely used framework in quantitative finance where volatility follows a mean-reverting square-root process. The model incorporates realistic features such as volatility clustering and correlation between price and volatility.
 
